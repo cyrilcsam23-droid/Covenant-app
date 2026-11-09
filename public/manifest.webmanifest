@@ -1,0 +1,12 @@
+{
+  "name": "Covenant",
+  "short_name": "Covenant",
+  "description": "Daily trips, expenses, profit and partner money.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#16171a",
+  "theme_color": "#16171a",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
