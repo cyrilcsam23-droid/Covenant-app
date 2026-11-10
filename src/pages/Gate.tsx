@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import { useAuth } from '../lib/auth';
 import { actions, APP_NAME, type Sync } from '../lib/store';
 import { Plate } from '../components/Plate';
@@ -45,6 +45,72 @@ export default function Gate({ sync }: { sync: Sync }) {
       <p className="mt-6 text-shell-muted" role="status">
         Loading your trips…
       </p>
+    </Shell>
+  );
+}
+
+/** Opened from a password-reset email: choose a new password before using the app. */
+export function SetNewPassword() {
+  const { session, setNewPassword, signOut } = useAuth();
+  const [password, setPassword] = useState('');
+  const [repeat, setRepeat] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (password.length < 8) return setError('Use at least 8 characters.');
+    if (password !== repeat) return setError('The two passwords don’t match.');
+    setBusy(true);
+    setError(await setNewPassword(password));
+    setBusy(false);
+  };
+
+  return (
+    <Shell>
+      <h1 className="mt-6 text-[1.6rem] font-semibold leading-tight">Choose a new password</h1>
+      <p className="mt-2 text-shell-muted">
+        For <strong className="font-semibold text-white">{session?.email}</strong>. Use at least 8 characters.
+      </p>
+      <form onSubmit={submit} noValidate className="mt-8 space-y-4">
+        <div>
+          <label htmlFor="new-password" className="mb-1.5 block text-sm font-medium text-shell-muted">
+            New password
+          </label>
+          <input
+            id="new-password"
+            type="password"
+            autoComplete="new-password"
+            className="field-input field-input-dark"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
+        <div>
+          <label htmlFor="repeat-password" className="mb-1.5 block text-sm font-medium text-shell-muted">
+            Type it again
+          </label>
+          <input
+            id="repeat-password"
+            type="password"
+            autoComplete="new-password"
+            className="field-input field-input-dark"
+            value={repeat}
+            onChange={(e) => setRepeat(e.target.value)}
+          />
+        </div>
+        {error && (
+          <p className="rounded-lg bg-loss/15 px-3 py-2 text-sm font-medium text-[#ffb4ab]" role="alert">
+            {error}
+          </p>
+        )}
+        <Button type="submit" disabled={busy} className="h-14 w-full text-[1.05rem]">
+          {busy ? 'Saving…' : 'Save new password'}
+        </Button>
+      </form>
+      <Button variant="ghost" className="mt-3 w-full !text-shell-muted" onClick={() => void signOut()}>
+        Cancel and sign out
+      </Button>
     </Shell>
   );
 }

@@ -6,7 +6,7 @@ import { isMisconfigured, useSync } from './lib/store';
 import { motionTokens } from './lib/motion';
 import { TabBar } from './components/Layout';
 import { SyncNotice } from './components/SyncNotice';
-import Gate, { NotConfigured } from './pages/Gate';
+import Gate, { NotConfigured, SetNewPassword } from './pages/Gate';
 import Home from './pages/Home';
 import Trips from './pages/Trips';
 import TripForm from './pages/TripForm';
@@ -34,7 +34,7 @@ const routes = [
 const isFormRoute = (path: string) => /^\/(trips|partners\/(capital|expense)|more)\/[^/]+$/.test(path);
 
 export default function App() {
-  const { session, loading } = useAuth();
+  const { session, loading, recovering } = useAuth();
   const sync = useSync();
   const location = useLocation();
   const element = useRoutes(routes, location);
@@ -48,6 +48,7 @@ export default function App() {
   if (isMisconfigured) return <NotConfigured />;
   if (loading) return <div className="min-h-dvh bg-shell" />;
   if (!session) return <Login />;
+  if (recovering) return <SetNewPassword />;
   if (sync.phase !== 'ready') return <Gate sync={sync} />;
 
   // Forms rise up from below; tab screens cross-fade in place.
