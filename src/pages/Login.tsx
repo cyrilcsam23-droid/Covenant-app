@@ -74,7 +74,7 @@ export default function Login() {
 
         <p className="mt-auto pt-10 text-sm leading-relaxed text-shell-muted">
           {isSupabaseConnected
-            ? 'Accounts are created by the admin in Supabase. Ask them if you can’t sign in.'
+            ? 'Only partner accounts can sign in. Ask the person who manages the app if you need a login or forgot your password.'
             : 'Demo mode: Supabase isn’t connected yet, so any email works and data stays on this phone.'}
         </p>
       </div>

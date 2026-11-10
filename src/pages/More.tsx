@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Cloud, CloudOff, LogOut } from 'lucide-react';
-import { actions, APP_NAME, useData } from '../lib/store';
+import { Link } from 'react-router-dom';
+import { ChevronRight, Cloud, CloudOff, LogOut, Users } from 'lucide-react';
+import { actions, APP_NAME, useData, useSync } from '../lib/store';
 import { useAuth } from '../lib/auth';
 import { isSupabaseConnected } from '../lib/supabase';
 import { toCSV } from '../lib/calc';
@@ -10,6 +11,7 @@ import { Button, ConfirmButton, SectionTitle, TextField, downloadFile } from '..
 
 export default function More() {
   const data = useData();
+  const sync = useSync();
   const { session, signOut } = useAuth();
 
   return (
@@ -46,8 +48,13 @@ export default function More() {
             <div className="text-sm text-ink-2">
               {isSupabaseConnected ? (
                 <p>
-                  <strong className="font-semibold text-ink">Supabase is connected.</strong> Sign-in uses your Supabase accounts. Trip data still saves on this
-                  phone until the data layer is switched over.
+                  <strong className="font-semibold text-ink">Saved online.</strong> All partners see the same trips and entries; changes reach the other
+                  phones within seconds. Without internet, changes are kept on this phone and upload automatically.
+                  {sync.pending > 0 && (
+                    <strong className="mt-1 block font-semibold text-ink">
+                      {sync.pending} {sync.pending === 1 ? 'change is' : 'changes are'} waiting to upload.
+                    </strong>
+                  )}
                 </p>
               ) : (
                 <p>
@@ -67,7 +74,7 @@ export default function More() {
             Download all trips (CSV)
           </Button>
 
-          {data.isSample ? (
+          {isSupabaseConnected ? null : data.isSample ? (
             <div>
               <p className="mb-2 text-sm text-ink-2">The app is showing sample trips and partner entries. Clear them to start logging real ones.</p>
               <ConfirmButton onConfirm={() => actions.startFresh()} armedLabel="Tap again to clear sample data">
@@ -84,11 +91,30 @@ export default function More() {
           )}
         </div>
 
+        {sync.isAdmin && (
+          <>
+            <SectionTitle>Logins</SectionTitle>
+            <Link
+              to="/more/logins"
+              className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 hover:border-ink-3"
+            >
+              <span className="flex items-center gap-3">
+                <Users size={20} className="text-ink-3" />
+                <span>
+                  <span className="block font-semibold">Manage logins</span>
+                  <span className="block text-sm text-ink-3">Add partners, approve, reset passwords, remove access</span>
+                </span>
+              </span>
+              <ChevronRight size={20} className="shrink-0 text-ink-3" />
+            </Link>
+          </>
+        )}
+
         <SectionTitle>Account</SectionTitle>
         <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4">
           <div className="min-w-0">
             <p className="truncate font-semibold">{session?.email}</p>
-            <p className="text-sm text-ink-3">{session?.demo ? 'Demo sign-in (Supabase not connected)' : 'Signed in'}</p>
+            <p className="text-sm text-ink-3">{session?.demo ? 'Demo sign-in (Supabase not connected)' : sync.isAdmin ? 'Signed in · Admin' : 'Signed in'}</p>
           </div>
           <Button variant="outline" className="!h-11 shrink-0" onClick={() => void signOut()}>
             <LogOut size={18} /> Sign out

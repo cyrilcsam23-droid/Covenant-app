@@ -2,14 +2,18 @@ import { useEffect } from 'react';
 import { useLocation, useRoutes } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useAuth } from './lib/auth';
+import { isMisconfigured, useSync } from './lib/store';
 import { motionTokens } from './lib/motion';
 import { TabBar } from './components/Layout';
+import { SyncNotice } from './components/SyncNotice';
+import Gate, { NotConfigured } from './pages/Gate';
 import Home from './pages/Home';
 import Trips from './pages/Trips';
 import TripForm from './pages/TripForm';
 import Partners from './pages/Partners';
 import EntryForm from './pages/EntryForm';
 import More from './pages/More';
+import Logins from './pages/Logins';
 import Login from './pages/Login';
 
 const routes = [
@@ -23,13 +27,15 @@ const routes = [
   { path: '/partners/expense/new', element: <EntryForm kind="expense" /> },
   { path: '/partners/expense/:id', element: <EntryForm kind="expense" /> },
   { path: '/more', element: <More /> },
+  { path: '/more/logins', element: <Logins /> },
   { path: '*', element: <Home /> },
 ];
 
-const isFormRoute = (path: string) => /^\/(trips|partners\/(capital|expense))\/[^/]+$/.test(path);
+const isFormRoute = (path: string) => /^\/(trips|partners\/(capital|expense)|more)\/[^/]+$/.test(path);
 
 export default function App() {
   const { session, loading } = useAuth();
+  const sync = useSync();
   const location = useLocation();
   const element = useRoutes(routes, location);
   const reduce = useReducedMotion();
@@ -39,8 +45,10 @@ export default function App() {
     if (!(location.state as { savedId?: string } | null)?.savedId) window.scrollTo(0, 0);
   }, [location.pathname, location.state]);
 
+  if (isMisconfigured) return <NotConfigured />;
   if (loading) return <div className="min-h-dvh bg-shell" />;
   if (!session) return <Login />;
+  if (sync.phase !== 'ready') return <Gate sync={sync} />;
 
   // Forms rise up from below; tab screens cross-fade in place.
   const y = reduce ? 0 : form ? motionTokens.distance.lg : 0;
@@ -59,6 +67,7 @@ export default function App() {
         </motion.div>
       </AnimatePresence>
       {!form && <TabBar />}
+      <SyncNotice />
     </div>
   );
 }

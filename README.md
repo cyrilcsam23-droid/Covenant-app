@@ -14,21 +14,42 @@ npm install
 npm run dev        # http://localhost:5180 (also reachable from a phone on the same Wi-Fi)
 ```
 
-It starts with **sample data** (marked "Sample"). Clear it from **More → Clear sample data**.
+Without Supabase settings the app runs in **demo mode**: any email signs in, sample data is shown, and everything stays on the device.
 
-## Status: shell
+## Supabase (connected)
 
-- Data is stored **on the device** (localStorage) through `src/lib/store.ts`.
-- Login is a **demo** until Supabase is connected.
+Data lives in Supabase project `gsrjwxpbxrhngbkviend` and is shared by all partners.
 
-## Connecting Supabase (later)
+- **Settings:** `.env.production` (committed) holds the project URL and the *publishable* key. Both are public by design; never put a secret or service_role key in any `VITE_` variable. `.env.local` (git-ignored) holds the same for `npm run dev`.
+- **Schema:** [`supabase/schema.sql`](supabase/schema.sql) creates tables, value checks, audit stamps and access rules. It is safe to run again after changes.
+- **Sync:** `src/lib/store.ts`. Changes show at once, are queued on the device and uploaded in order (so nothing is lost without signal); other partners' changes arrive live.
 
-1. Create a project at supabase.com.
-2. SQL Editor → paste and run [`supabase/schema.sql`](supabase/schema.sql).
-3. Authentication → Users → add one user per partner (email + password).
-4. Copy `.env.example` to `.env.local` and fill in the Project URL and anon key.
-5. Restart `npm run dev`. Sign-in now uses Supabase.
-6. Switch the data layer: replace the function bodies in `src/lib/store.ts` (`saveTrip`, `deleteTrip`, `saveCapital`, …) with Supabase queries. The screens only call those functions.
+### Security
+
+- Public sign-ups are **off**. Logins are created only under **Authentication → Users**.
+- A login sees data only once it is **approved**. Run this in the SQL Editor:
+  ```sql
+  insert into app_members (user_id) select id from auth.users where email = 'partner@example.com';
+  ```
+- Signed-out visitors get no access to any table. Signed-in users can't delete partners or settings, can't approve logins, and can't fake who wrote an entry.
+- The database rejects bad values: negative amounts, end km below start km, unknown categories.
+- Built pages carry a Content-Security-Policy that only allows the app's own code and its own Supabase project.
+- Passwords need at least 8 characters.
+
+### Adding a partner
+
+**In the app (admins):** **More → Manage logins → Add a login**. The same screen can also approve a login made in the dashboard, set a new password, or remove access. It works through the `admin-users` Edge Function ([`supabase/functions/admin-users`](supabase/functions/admin-users/index.ts)):
+- The function holds the service-role key on the server.
+- It checks every request against the caller's own sign-in and admin role.
+- It refuses to remove the last admin or your own access.
+- Removing access keeps the login (for the record of who entered what) but blocks it at once.
+
+**In Supabase:** **Authentication → Users → Add user → Create new user**. Tick **Auto Confirm User**, then approve the login with the SQL above. The first admin has to be added this way:
+```sql
+insert into app_members (user_id, role) select id, 'admin' from auth.users where email = 'owner@example.com';
+```
+
+**Redeploying the function:** after editing it, deploy with the Supabase CLI (`supabase functions deploy admin-users --no-verify-jwt`) or the Management API. The function verifies sign-in tokens itself.
 
 ## Files
 

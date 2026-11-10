@@ -24,11 +24,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # Empty until the repo variables are set; the app then stays in demo mode.
+      # Supabase address and public key come from .env.production.
       - run: npm run build -- --base=/${{ github.event.repository.name }}/
-        env:
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
       # GitHub Pages serves 404.html for unknown paths, so refreshing /trips still loads the app.
       - run: cp dist/index.html dist/404.html
       - uses: actions/upload-pages-artifact@v3

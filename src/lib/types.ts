@@ -1,6 +1,8 @@
 export interface Partner {
   id: string;
   name: string;
+  /** Display order (cloud mode). */
+  position?: number;
 }
 
 export interface Trip {
