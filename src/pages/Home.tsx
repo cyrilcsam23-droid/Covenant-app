@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Plus, ChevronRight } from 'lucide-react';
 import { useData } from '../lib/store';
-import { dailyProfit, groupByDay, partnerTotals, summarize, type Period } from '../lib/calc';
+import { dailyProfit, dues, groupByDay, ongoingTrips, partnerTotals, summarize, upcomingTrips, type Period } from '../lib/calc';
 import { fmtDay, fmtMonth, money, monthOf, num, todayISO } from '../lib/format';
 import { ShellHeader, Page } from '../components/Layout';
 import { ResultPlate, RollingMoney, VehiclePlate } from '../components/Plate';
@@ -52,12 +52,12 @@ export default function Home() {
           </h1>
           <ResultPlate value={s.tripProfit} size="lg" className="mt-3" />
           <p className="mt-3 text-sm text-shell-muted">
-            {s.tripCount === 0 ? 'No trips yet' : `${s.tripCount} ${s.tripCount === 1 ? 'trip' : 'trips'}`}
+            {s.tripCount === 0 ? 'No finished trips yet' : `${s.tripCount} finished ${s.tripCount === 1 ? 'trip' : 'trips'}`}
           </p>
         </div>
 
         <dl className="mt-6 grid grid-cols-3 divide-x divide-shell-line rounded-xl bg-shell-2">
-          <Stat label="Received" value={<RollingMoney value={s.received} />} />
+          <Stat label="Fares" value={<RollingMoney value={s.fares} />} />
           <Stat label="Trip expenses" value={<RollingMoney value={s.tripCost} />} />
           <Stat label="Distance" value={`${num(s.km)} km`} />
         </dl>
@@ -69,6 +69,8 @@ export default function Home() {
         </Button>
 
         {data.isSample && <SampleNotice />}
+
+        <Ahead />
 
         {range === 'month' && <MonthChart month={month} />}
 
@@ -108,6 +110,67 @@ export default function Home() {
         </ul>
         <div className="h-8" />
       </Page>
+    </>
+  );
+}
+
+/** What needs attention: trips on the road, money still owed, the next bookings. */
+function Ahead() {
+  const data = useData();
+  const ongoing = ongoingTrips(data);
+  const owed = dues(data);
+  const next = upcomingTrips(data).slice(0, 3);
+  if (ongoing.length === 0 && owed.total === 0 && next.length === 0) return null;
+
+  return (
+    <>
+      {ongoing.length > 0 && (
+        <>
+          <SectionTitle>On trip now</SectionTitle>
+          <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+            {ongoing.map((t) => (
+              <TripRow key={t.id} trip={t} showDate />
+            ))}
+          </ul>
+        </>
+      )}
+
+      {owed.total > 0 && (
+        <Link
+          to="/trips?view=dues"
+          className="mt-8 flex items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3.5 hover:border-ink-3"
+        >
+          <span className="min-w-0">
+            <span className="block font-semibold">To collect</span>
+            <span className="block truncate text-[0.83rem] text-ink-3">
+              From {owed.trips.length} finished {owed.trips.length === 1 ? 'trip' : 'trips'}, oldest {fmtDay(owed.trips[0].date)}
+            </span>
+          </span>
+          <span className="flex shrink-0 items-center gap-1.5">
+            <span className="num text-[1.3rem] font-semibold">{money(owed.total)}</span>
+            <ChevronRight size={18} className="text-ink-3" />
+          </span>
+        </Link>
+      )}
+
+      {next.length > 0 && (
+        <>
+          <SectionTitle
+            action={
+              <Link to="/trips?view=upcoming" className="flex items-center text-sm font-semibold text-ink-2 hover:text-ink">
+                All bookings <ChevronRight size={16} />
+              </Link>
+            }
+          >
+            Coming up
+          </SectionTitle>
+          <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+            {next.map((t) => (
+              <TripRow key={t.id} trip={t} showDate />
+            ))}
+          </ul>
+        </>
+      )}
     </>
   );
 }

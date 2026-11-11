@@ -14,7 +14,22 @@ npm install
 npm run dev        # http://localhost:5180 (also reachable from a phone on the same Wi-Fi)
 ```
 
-Without Supabase settings the app runs in **demo mode**: any email signs in, sample data is shown, and everything stays on the device.
+Without Supabase settings the app runs in **demo mode**: any email signs in, sample data is shown, and everything stays on the device. To try it on this computer without touching real data, run:
+
+```bash
+npm run dev:demo     # http://localhost:5181, sample trips, any email signs in
+```
+
+Published builds never fall back to demo mode.
+
+## Tests
+
+```bash
+npm run check        # type-check + unit tests (money rules, dates, statuses, calendar file, save format) + build
+npm run test:db      # security and rules tests against the live database; each test rolls itself back
+```
+
+Run both after any change to trips, money or the database.
 
 ## Supabase (connected)
 

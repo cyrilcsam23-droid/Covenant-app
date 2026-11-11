@@ -171,6 +171,13 @@ Flat and tonal. Depth comes from the charcoal shell against the light ground, an
 - **Result plate:** yellow with a `+₹` value for profit, red with a `−₹` value for a loss, grey for zero. It always carries a sign and an aria-label ("Profit ₹2,690"), so colour is never the only cue. The value rolls to its new number over 0.6s whenever it changes; with reduced motion it jumps.
 - **Trip row:** route `From → To` in semibold, then km (Barlow) · only the non-zero expenses, optional notes, and a small result plate on the right. The whole row is the edit link. A just-saved row enters with a yellow wash that fades out.
 - **Segmented control:** sliding indicator (yellow on charcoal, white on the light ground).
+- **Trip status:** a trip that isn't finished has no result yet, so it never shows a plate. A grey pill reads "Upcoming" and a charcoal pill reads "On trip · Day 2". A finished trip with money owed adds "₹4,000 to collect" in semibold ink. A due is not a loss, so it is never red.
+- **Trip form footer:** for a booking or a trip still on the road, the footer says "Expected profit" and "Balance due". It switches to "Profit / Loss" and "To collect" once the trip ends. With no fare yet it says "Profit shows once the fare is in", never a misleading red plate.
+- **Day-by-day expenses:** one white group with a row per day ("Day 2 · Wed, 13 Nov", day total in Barlow, chevron). Only one day is open at a time: today while on the trip, Day 1 of a booking, or the last day of a finished trip.
+- **Add chips:** pill buttons with a + icon, for optional expense types (Driver bata, Food, Stay, Other), "Add a payment", "Add day 3" and "Fully paid · ₹7,000". Fuel, Toll and Parking are always shown.
+- **Switch:** a 40×28 track that is plate yellow with an ink rim when on (active state) and grey when off, with an ink knob. It is used for "End date not known yet" and "Add to my phone calendar".
+- **Calendar:** a 7-column month grid starting on Sunday, with Barlow day numbers. Dots mark the days with trips: filled for a trip, a ring for a booking. The selected day is a yellow plate tile, and today has an ink ring. The day's trips are listed below the grid.
+- **To collect row:** route, dates and customer, "Received ₹X of ₹Y", and the due in Barlow on the right. Underneath are actions: "Call Rajesh" (a tel: link) and "Mark ₹4,000 received" (two-tap confirm).
 - **Delete:** two-tap confirm ("Tap again to delete"), never a modal.
 - **Inputs:** 48px tall. Money fields have a ₹ prefix, decimal keypad, and Barlow figures. Focus shows a charcoal border with a yellow halo.
 

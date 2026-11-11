@@ -33,6 +33,27 @@ export const fmtMonth = (ym: string) =>
 
 export const monthOf = (iso: string) => iso.slice(0, 7);
 
+/** ISO date `n` days after `iso` (negative goes back). */
+export function addDays(iso: string, n: number): string {
+  const d = parseISO(iso);
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Whole days from `a` to `b` (b − a). */
+export const daysBetween = (a: string, b: string) => Math.round((parseISO(b).getTime() - parseISO(a).getTime()) / 86400000);
+
+/** "12 Nov", or "12–15 Nov", "30 Nov – 2 Dec", "From 12 Nov" when the end isn't known. */
+export function fmtRange(start: string, end: string | null): string {
+  const short = (iso: string) => parseISO(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  if (end === null) return `From ${short(start)}`;
+  if (end === start) return short(start);
+  const a = parseISO(start);
+  const b = parseISO(end);
+  if (a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()) return `${a.getDate()}–${short(end)}`;
+  return `${short(start)} – ${short(end)}`;
+}
+
 export function shiftMonth(ym: string, delta: number): string {
   const [y, m] = ym.split('-').map(Number);
   const d = new Date(y, m - 1 + delta, 1);

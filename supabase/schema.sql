@@ -27,29 +27,95 @@ create table if not exists partners (
   created_at timestamptz not null default now()
 );
 
+-- Helpers for trips' payment and expense lists (JSON arrays). Immutable, so the
+-- database can use them in totals and checks.
+create or replace function public.jsonb_amount_total(lines jsonb) returns numeric
+language sql immutable set search_path = ''
+as $$
+  select coalesce(sum((e->>'amount')::numeric), 0)
+  from jsonb_array_elements(case when jsonb_typeof(lines) = 'array' then lines else '[]'::jsonb end) e
+$$;
+
+create or replace function public.trip_lines_ok(payments jsonb, costs jsonb) returns boolean
+language sql immutable set search_path = ''
+as $$
+  select jsonb_typeof(payments) = 'array' and jsonb_typeof(costs) = 'array'
+    and jsonb_array_length(payments) <= 100 and jsonb_array_length(costs) <= 500
+    and not exists (
+      select 1 from jsonb_array_elements(payments) p
+      where not (jsonb_typeof(p) = 'object'
+        and coalesce(p->>'kind', '') in ('advance', 'balance')
+        and jsonb_typeof(p->'amount') = 'number'
+        and coalesce(p->>'date', '') ~ '^\d{4}-\d{2}-\d{2}$'))
+    and not exists (
+      select 1 from jsonb_array_elements(payments) p
+      where jsonb_typeof(p->'amount') = 'number' and not ((p->>'amount')::numeric > 0 and (p->>'amount')::numeric < 100000000))
+    and not exists (
+      select 1 from jsonb_array_elements(costs) c
+      where not (jsonb_typeof(c) = 'object'
+        and coalesce(c->>'type', '') in ('Fuel', 'Toll', 'Parking', 'Driver bata', 'Food', 'Stay', 'Other')
+        and jsonb_typeof(c->'amount') = 'number'
+        and coalesce(c->>'date', '') ~ '^\d{4}-\d{2}-\d{2}$'))
+    and not exists (
+      select 1 from jsonb_array_elements(costs) c
+      where jsonb_typeof(c->'amount') = 'number' and not ((c->>'amount')::numeric > 0 and (c->>'amount')::numeric < 100000000))
+$$;
+
+revoke all on function public.jsonb_amount_total(jsonb) from public, anon;
+revoke all on function public.trip_lines_ok(jsonb, jsonb) from public, anon;
+grant execute on function public.jsonb_amount_total(jsonb) to authenticated;
+grant execute on function public.trip_lines_ok(jsonb, jsonb) to authenticated;
+
+-- A trip: one day, several days, or several days with the end not known yet (end_date null).
+-- Money: the agreed fare, a list of payments (advance / balance), and a day-by-day list of
+-- expenses. Totals, profit and the amount still due are worked out by the database.
 create table if not exists trips (
   id uuid primary key default gen_random_uuid(),
-  trip_date date not null default current_date,
+  trip_date date not null default current_date,   -- start date
   vehicle text not null default '',
   from_place text not null,
   to_place text not null,
   start_km numeric(10,1),
   end_km numeric(10,1),
   km numeric(10,1) not null default 0,
-  fuel numeric(12,2) not null default 0,
-  toll numeric(12,2) not null default 0,
-  parking numeric(12,2) not null default 0,
-  other_expense numeric(12,2) not null default 0,
-  received numeric(12,2) not null default 0,
-  total_expense numeric(12,2) generated always as (fuel + toll + parking + other_expense) stored,
-  profit numeric(12,2) generated always as (received - (fuel + toll + parking + other_expense)) stored,
   notes text not null default '',
   created_by uuid references auth.users(id) default auth.uid(),
   created_at timestamptz not null default now()
 );
+alter table trips
+  add column if not exists end_date date,                                  -- null = end not known yet
+  add column if not exists customer_name text not null default '',
+  add column if not exists customer_phone text not null default '',
+  add column if not exists fare numeric(12,2) not null default 0,          -- agreed total, incl. advance
+  add column if not exists payments jsonb not null default '[]'::jsonb,    -- [{date, kind, amount}]
+  add column if not exists costs jsonb not null default '[]'::jsonb;       -- [{date, type, amount}]
+
+-- One-time conversion from the first version (fuel / toll / parking / other / received columns).
+do $$
+begin
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'trips' and column_name = 'fuel') then
+    alter table public.trips drop column if exists profit, drop column if exists total_expense;
+    alter table public.trips drop constraint if exists trips_amounts_ok;
+    update public.trips t set
+      end_date = coalesce(t.end_date, t.trip_date),
+      fare = t.received,
+      payments = case when t.received > 0
+        then jsonb_build_array(jsonb_build_object('date', t.trip_date, 'kind', 'balance', 'amount', t.received))
+        else '[]'::jsonb end,
+      costs = (
+        select coalesce(jsonb_agg(jsonb_build_object('date', t.trip_date, 'type', x.type, 'amount', x.amount)), '[]'::jsonb)
+        from (values ('Fuel', t.fuel), ('Toll', t.toll), ('Parking', t.parking), ('Other', t.other_expense)) as x(type, amount)
+        where x.amount > 0);
+    alter table public.trips drop column fuel, drop column toll, drop column parking, drop column other_expense, drop column received;
+  end if;
+end $$;
+
+alter table trips
+  add column if not exists total_expense numeric(12,2) generated always as (public.jsonb_amount_total(costs)) stored,
+  add column if not exists received_total numeric(12,2) generated always as (public.jsonb_amount_total(payments)) stored,
+  add column if not exists profit numeric(12,2) generated always as (fare - public.jsonb_amount_total(costs)) stored,
+  add column if not exists due numeric(12,2) generated always as (greatest(fare - public.jsonb_amount_total(payments), 0)) stored;
 create index if not exists trips_date_idx on trips (trip_date desc);
-create index if not exists capital_entries_partner_idx on capital_entries (partner_id);
-create index if not exists partner_expenses_partner_idx on partner_expenses (partner_id);
 
 create table if not exists capital_entries (
   id uuid primary key default gen_random_uuid(),
@@ -87,6 +153,9 @@ create table if not exists app_members (
 );
 alter table app_members add column if not exists role text not null default 'partner';
 
+create index if not exists capital_entries_partner_idx on capital_entries (partner_id);
+create index if not exists partner_expenses_partner_idx on partner_expenses (partner_id);
+
 -- Audit columns: who last changed an entry, and when.
 alter table trips            add column if not exists updated_at timestamptz, add column if not exists updated_by uuid references auth.users(id);
 alter table capital_entries  add column if not exists updated_at timestamptz, add column if not exists updated_by uuid references auth.users(id);
@@ -99,7 +168,10 @@ declare c record;
 begin
   for c in
     select * from (values
-      ('trips', 'trips_amounts_ok', 'check (fuel >= 0 and toll >= 0 and parking >= 0 and other_expense >= 0 and received >= 0 and km >= 0)'),
+      ('trips', 'trips_money_ok', 'check (fare >= 0 and km >= 0)'),
+      ('trips', 'trips_lines_ok', 'check (public.trip_lines_ok(payments, costs))'),
+      ('trips', 'trips_end_ok', 'check (end_date is null or (end_date >= trip_date and end_date <= trip_date + 120))'),
+      ('trips', 'trips_customer_ok', 'check (char_length(customer_name) <= 80 and customer_phone ~ ''^[0-9+() -]{0,20}$'')'),
       ('trips', 'trips_odometer_ok', 'check ((start_km is null or start_km >= 0) and (end_km is null or end_km >= 0) and (start_km is null or end_km is null or end_km >= start_km))'),
       ('trips', 'trips_text_ok', 'check (char_length(btrim(from_place)) between 1 and 120 and char_length(btrim(to_place)) between 1 and 120 and char_length(vehicle) <= 30 and char_length(notes) <= 1000)'),
       ('trips', 'trips_date_ok', 'check (trip_date >= date ''2000-01-01'')'),

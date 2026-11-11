@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-React + Vite + TypeScript + Tailwind v4, installable as a mobile web app (PWA manifest). Supabase (auth + Postgres) is the intended backend; it is not connected yet, so the shell runs on device-local storage behind a data layer that will be swapped for Supabase.
+React + Vite + TypeScript + Tailwind v4, installable as a mobile web app (PWA manifest), hosted on GitHub Pages. Supabase (auth + Postgres + an Edge Function for login management) holds the shared data; changes queue on the phone when offline. `npm run dev:demo` runs a local demo with sample data.
 
 ## Users
 
@@ -26,10 +26,17 @@ A "daily dropship" ledger: for each date, record the trip(s) the vehicle did (fr
 
 ## Capabilities and Constraints
 
-- Trips: date, vehicle (optional; one vehicle today, more later), from, to, start/end odometer or distance in km, fuel, toll, parking, other expense, amount received, notes. Profit = received − expenses.
+- **Trips:** one day or several days. The end date may be unknown while on the trip; "Finish trip" sets it. Each trip records:
+  - customer name and phone (optional)
+  - vehicle, from, to, odometer or km
+  - **agreed fare**, an **advance** (amount and date) and later payments
+  - **day-by-day expenses**: fuel, toll, parking, driver bata, food, stay, other
+- **Money rules:** profit = fare − expenses, counted on the full fare, so money owed still counts. Due = fare − payments, shown as "To collect".
+- **Status and totals:** a trip is Upcoming, On trip or Completed, worked out from its dates. Totals count completed trips only, under their **start date**.
+- **Bookings:** future trips are listed under Upcoming and in a calendar. "Add to phone calendar" downloads an .ics event that reminds at 6 pm the evening before and 7 am on the day.
 - Partner capital: dated entries per partner, added over time. Starting amounts are unequal/unknown: start at zero, partners enter their own.
 - Partner-paid expenses: date, partner, amount, description (maintenance, repairs, etc.).
-- Accounts: Supabase auth planned; until connected, login is a demo shell.
+- Accounts: Supabase email and password. Public sign-up is off. Logins must be approved, and admins manage them from More → Manage logins. Forgot password is available on the sign-in screen.
 - App name: Covenant (editable in More). Open: whether partner-paid expenses are reimbursed or treated as extra capital.
 
 ## Brand Commitments

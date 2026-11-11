@@ -14,8 +14,8 @@
 import { useSyncExternalStore } from 'react';
 import type { PostgrestError, RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from './supabase';
-import type { AppData, CapitalEntry, Partner, PartnerExpense, Settings, Trip } from './types';
-import { todayISO } from './format';
+import type { AppData, CapitalEntry, Partner, PartnerExpense, Settings, Trip, TripCost, TripCostType, TripPayment } from './types';
+import { addDays, todayISO } from './format';
 
 const KEY = 'dropship:data:v1'; // demo-mode key; kept so saved data survives the rename
 
@@ -91,52 +91,119 @@ function daysAgo(n: number) {
   return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
 }
 
-type SampleRow = [number, string, string, number, number, number, number, number, number, string?];
+/**
+ * Brings a trip saved by an older version of the app (fuel / toll / parking / other /
+ * received fields) into the current shape, and fills any missing fields.
+ */
+export function normalizeTrip(raw: unknown): Trip {
+  const t = (raw ?? {}) as Record<string, unknown>;
+  const str = (v: unknown) => (typeof v === 'string' ? v : '');
+  const numOr0 = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  const date = str(t.date) || todayISO();
+  const legacy = !Array.isArray(t.costs) && ('fuel' in t || 'received' in t);
+  let costs: TripCost[] = Array.isArray(t.costs) ? (t.costs as TripCost[]) : [];
+  let payments: TripPayment[] = Array.isArray(t.payments) ? (t.payments as TripPayment[]) : [];
+  let fare = numOr0(t.fare);
+  if (legacy) {
+    const old: [TripCostType, unknown][] = [['Fuel', t.fuel], ['Toll', t.toll], ['Parking', t.parking], ['Other', t.other]];
+    costs = old.filter(([, a]) => numOr0(a) > 0).map(([type, a]) => ({ date, type, amount: numOr0(a) }));
+    const received = numOr0(t.received);
+    fare = received;
+    payments = received > 0 ? [{ date, kind: 'balance', amount: received }] : [];
+  }
+  return {
+    id: str(t.id) || uid(),
+    date,
+    endDate: t.endDate === null ? null : str(t.endDate) || (legacy ? date : date),
+    vehicle: str(t.vehicle),
+    from: str(t.from),
+    to: str(t.to),
+    startKm: t.startKm === null || t.startKm === undefined ? null : numOr0(t.startKm),
+    endKm: t.endKm === null || t.endKm === undefined ? null : numOr0(t.endKm),
+    km: numOr0(t.km),
+    customerName: str(t.customerName),
+    customerPhone: str(t.customerPhone),
+    fare,
+    payments: payments.filter((p) => p && numOr0(p.amount) > 0).map((p) => ({ date: str(p.date) || date, kind: p.kind === 'advance' ? 'advance' : 'balance', amount: numOr0(p.amount) })),
+    costs: costs.filter((c) => c && numOr0(c.amount) > 0).map((c) => ({ date: str(c.date) || date, type: c.type, amount: numOr0(c.amount) })),
+    notes: str(t.notes),
+    createdAt: str(t.createdAt) || new Date().toISOString(),
+  };
+}
+
+const normalizeData = (d: AppData): AppData => ({ ...d, trips: (d.trips ?? []).map(normalizeTrip) });
 
 /** Clearly-labelled sample data so the screens have something to show (demo mode only). */
 function sampleData(): AppData {
   const base = emptyData();
   const v = 'KL 07 AB 1234';
-  // daysAgo, from, to, km, fuel, toll, parking, other, received, notes
-  const rows: SampleRow[] = [
-    [0, 'Kochi Airport', 'Munnar', 112, 1450, 0, 60, 0, 4200],
-    [0, 'Munnar', 'Kochi Airport', 110, 0, 0, 0, 150, 3800, 'Driver food'],
-    [1, 'Ernakulam', 'Thrissur', 78, 980, 135, 40, 0, 2600],
-    [2, 'Aluva', 'Alappuzha', 64, 820, 0, 30, 0, 1900],
-    [3, 'Kochi', 'Kumarakom', 55, 700, 0, 0, 0, 1500],
-    [4, 'Ernakulam', 'Thekkady', 160, 2100, 0, 100, 200, 5200],
-    [5, 'Thekkady', 'Ernakulam', 158, 2050, 0, 0, 0, 2000, 'Return empty, part fare'],
-    [7, 'Kochi Airport', 'Kozhikode', 190, 2500, 270, 50, 0, 3900, 'Rain, slow traffic'],
-    [9, 'Ernakulam', 'Guruvayur', 82, 1050, 135, 60, 0, 2800],
-    [12, 'Kochi', 'Vagamon', 102, 1350, 0, 40, 0, 3100],
-    [15, 'Aluva', 'Kochi Airport', 18, 260, 0, 120, 0, 800],
-    [18, 'Ernakulam', 'Kollam', 140, 1800, 135, 40, 0, 3600],
-  ];
   let odo = 48210;
-  base.trips = rows
-    .slice()
-    .reverse()
-    .map(([ago, from, to, km, fuel, toll, parking, other, received, notes], i) => {
-      const startKm = odo;
-      odo += km + 6;
-      return {
-        id: uid(),
-        date: daysAgo(ago),
-        vehicle: v,
-        from,
-        to,
-        startKm,
-        endKm: startKm + km,
-        km,
-        fuel,
-        toll,
-        parking,
-        other,
-        received,
-        notes: notes ?? '',
-        createdAt: new Date(Date.now() - ago * 86400000 - (rows.length - i) * 3600000).toISOString(),
-      };
-    });
+  let n = 0;
+  const trip = (
+    ago: number,
+    from: string,
+    to: string,
+    km: number,
+    o: { days?: number | null; fare: number; customer?: [string, string]; advance?: [number, number]; paid?: number; costs?: [number, TripCostType, number][]; notes?: string },
+  ): Trip => {
+    const date = daysAgo(ago);
+    const started = ago >= 0;
+    const endDate = o.days === null ? null : daysAgo(ago - (o.days ?? 1) + 1);
+    const startKm = started ? odo : null;
+    if (started) odo += km + 6;
+    const payments: TripPayment[] = [];
+    if (o.advance) payments.push({ date: daysAgo(o.advance[1]), kind: 'advance', amount: o.advance[0] });
+    if (o.paid) payments.push({ date: endDate ?? date, kind: 'balance', amount: o.paid });
+    return {
+      id: uid(),
+      date,
+      endDate,
+      vehicle: v,
+      from,
+      to,
+      startKm,
+      endKm: started && o.days !== null ? (startKm ?? 0) + km : null,
+      km: started ? km : 0,
+      customerName: o.customer?.[0] ?? '',
+      customerPhone: o.customer?.[1] ?? '',
+      fare: o.fare,
+      payments,
+      costs: (o.costs ?? []).map(([dayIndex, type, amount]) => ({ date: addDays(date, dayIndex), type, amount })),
+      notes: o.notes ?? '',
+      createdAt: new Date(Date.now() - ago * 86400000 - ++n * 3600000).toISOString(),
+    };
+  };
+  base.trips = [
+    trip(18, 'Ernakulam', 'Kollam', 140, { fare: 3600, paid: 3600, costs: [[0, 'Fuel', 1800], [0, 'Toll', 135], [0, 'Parking', 40]] }),
+    trip(15, 'Aluva', 'Kochi Airport', 18, { fare: 800, paid: 800, costs: [[0, 'Fuel', 260], [0, 'Parking', 120]] }),
+    trip(12, 'Kochi', 'Vagamon', 102, { fare: 3100, paid: 3100, costs: [[0, 'Fuel', 1350], [0, 'Parking', 40]] }),
+    trip(10, 'Ernakulam', 'Munnar', 410, {
+      days: 3,
+      fare: 14500,
+      customer: ['Rajesh Menon', '+91 98470 12345'],
+      advance: [4000, 16],
+      paid: 6500,
+      costs: [[0, 'Fuel', 2400], [0, 'Toll', 135], [0, 'Driver bata', 600], [1, 'Stay', 1200], [1, 'Food', 450], [1, 'Driver bata', 600], [2, 'Fuel', 2100], [2, 'Driver bata', 600]],
+      notes: 'Sample: family tour, Munnar and Thekkady',
+    }),
+    trip(7, 'Kochi Airport', 'Kozhikode', 190, { fare: 3900, paid: 3900, costs: [[0, 'Fuel', 2500], [0, 'Toll', 270], [0, 'Parking', 50]], notes: 'Rain, slow traffic' }),
+    trip(5, 'Thekkady', 'Ernakulam', 158, { fare: 2000, paid: 2000, costs: [[0, 'Fuel', 2050], [0, 'Parking', 100]], notes: 'Return empty, part fare' }),
+    trip(4, 'Ernakulam', 'Thekkady', 160, { fare: 5200, customer: ['Anitha', '+91 94460 55120'], advance: [1500, 6], paid: 1700, costs: [[0, 'Fuel', 2100], [0, 'Parking', 100], [0, 'Other', 200]] }),
+    trip(3, 'Kochi', 'Kumarakom', 55, { fare: 1500, paid: 1500, costs: [[0, 'Fuel', 700]] }),
+    trip(2, 'Aluva', 'Alappuzha', 64, { fare: 1900, paid: 1900, costs: [[0, 'Fuel', 820], [0, 'Parking', 30]] }),
+    trip(1, 'Kochi', 'Kanyakumari', 300, {
+      days: null,
+      fare: 0,
+      customer: ['Suresh Kumar', '+91 90370 44781'],
+      advance: [5000, 3],
+      costs: [[0, 'Fuel', 2600], [0, 'Toll', 270], [0, 'Driver bata', 600], [1, 'Stay', 1400], [1, 'Food', 380]],
+      notes: 'Sample: end date not known yet',
+    }),
+    trip(0, 'Kochi Airport', 'Munnar', 112, { fare: 4200, paid: 4200, costs: [[0, 'Fuel', 1450], [0, 'Parking', 60]] }),
+    trip(0, 'Ernakulam', 'Thrissur', 78, { fare: 2600, paid: 2600, costs: [[0, 'Fuel', 980], [0, 'Toll', 135], [0, 'Parking', 40]] }),
+    trip(-3, 'Kochi', 'Wayanad', 0, { days: 2, fare: 9000, customer: ['Fathima', '+91 81290 33456'], advance: [2000, 1], notes: 'Sample: upcoming booking' }),
+    trip(-6, 'Kochi Airport', 'Varkala', 0, { fare: 3400, customer: ['Arjun', '+91 70250 11893'], advance: [1000, 0] }),
+  ];
   base.capital = [
     { id: uid(), partnerId: 'p1', date: daysAgo(40), amount: 120000, note: 'Sample: initial capital' },
     { id: uid(), partnerId: 'p2', date: daysAgo(40), amount: 100000, note: 'Sample: initial capital' },
@@ -163,7 +230,7 @@ function loadLocal(): AppData {
       const settings = { ...e.settings, ...parsed.settings };
       // Devices that saved the old placeholder name pick up the new one.
       if (OLD_NAMES.includes(settings.businessName)) settings.businessName = APP_NAME;
-      return { ...e, ...parsed, settings };
+      return normalizeData({ ...e, ...parsed, settings });
     }
     firstVisit = true;
   } catch {
@@ -285,37 +352,40 @@ const n = (v: unknown) => Number(v ?? 0);
 const nOrNull = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 const s = (v: unknown) => (typeof v === 'string' ? v : '');
 
-const tripFromRow = (r: Row): Trip => ({
-  id: s(r.id),
-  date: s(r.trip_date),
-  vehicle: s(r.vehicle),
-  from: s(r.from_place),
-  to: s(r.to_place),
-  startKm: nOrNull(r.start_km),
-  endKm: nOrNull(r.end_km),
-  km: n(r.km),
-  fuel: n(r.fuel),
-  toll: n(r.toll),
-  parking: n(r.parking),
-  other: n(r.other_expense),
-  received: n(r.received),
-  notes: s(r.notes),
-  createdAt: s(r.created_at),
-});
-const tripToRow = (t: Trip) => ({
+export const tripFromRow = (r: Row): Trip =>
+  normalizeTrip({
+    id: s(r.id),
+    date: s(r.trip_date),
+    endDate: r.end_date === null ? null : s(r.end_date),
+    vehicle: s(r.vehicle),
+    from: s(r.from_place),
+    to: s(r.to_place),
+    startKm: nOrNull(r.start_km),
+    endKm: nOrNull(r.end_km),
+    km: n(r.km),
+    customerName: s(r.customer_name),
+    customerPhone: s(r.customer_phone),
+    fare: n(r.fare),
+    payments: Array.isArray(r.payments) ? r.payments : [],
+    costs: Array.isArray(r.costs) ? r.costs : [],
+    notes: s(r.notes),
+    createdAt: s(r.created_at),
+  });
+export const tripToRow = (t: Trip) => ({
   id: t.id,
   trip_date: t.date,
+  end_date: t.endDate,
   vehicle: t.vehicle,
   from_place: t.from,
   to_place: t.to,
   start_km: t.startKm,
   end_km: t.endKm,
   km: t.km,
-  fuel: t.fuel,
-  toll: t.toll,
-  parking: t.parking,
-  other_expense: t.other,
-  received: t.received,
+  customer_name: t.customerName,
+  customer_phone: t.customerPhone,
+  fare: t.fare,
+  payments: t.payments.map((p) => ({ date: p.date, kind: p.kind, amount: p.amount })),
+  costs: t.costs.map((c) => ({ date: c.date, type: c.type, amount: c.amount })),
   notes: t.notes,
 });
 const capitalFromRow = (r: Row): CapitalEntry => ({
@@ -517,8 +587,10 @@ async function refresh() {
 async function start(id: string) {
   const db = supabase!;
   userId = id;
-  outbox = readJSON<Change[]>(outboxKey(id), []);
-  const cached = readJSON<AppData | null>(cacheKey(id), null);
+  // Saved by an older version of the app? Bring trips into the current shape first.
+  outbox = readJSON<Change[]>(outboxKey(id), []).map((c) => (c.type === 'trip.save' ? { ...c, trip: normalizeTrip(c.trip) } : c));
+  const storedCache = readJSON<AppData | null>(cacheKey(id), null);
+  const cached = storedCache ? normalizeData(storedCache) : null;
   state = outbox.reduce(apply, cached ?? emptyData([]));
   sync = { mode: 'cloud', phase: cached ? 'ready' : 'loading', pending: outbox.length, offline: false, message: null, isAdmin: false };
   emit();
@@ -609,6 +681,18 @@ export const actions = {
   },
   deleteTrip(id: string) {
     dispatch({ type: 'trip.delete', id });
+  },
+  /** Records money received after the trip (e.g. "Mark as paid" on a due). */
+  recordPayment(tripId: string, amount: number, date = todayISO()) {
+    const t = state.trips.find((x) => x.id === tripId);
+    if (!t || !(amount > 0)) return;
+    dispatch({ type: 'trip.save', trip: { ...t, payments: [...t.payments, { date, kind: 'balance', amount }] }, isNew: false });
+  },
+  /** Ends a trip whose end date wasn't known. */
+  finishTrip(tripId: string, endDate = todayISO()) {
+    const t = state.trips.find((x) => x.id === tripId);
+    if (!t) return;
+    dispatch({ type: 'trip.save', trip: { ...t, endDate: endDate < t.date ? t.date : endDate }, isNew: false });
   },
   saveCapital(input: Omit<CapitalEntry, 'id'>, id?: string) {
     dispatch({ type: 'capital.save', entry: { ...input, id: id ?? uid() }, isNew: !id });

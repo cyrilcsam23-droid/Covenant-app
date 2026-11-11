@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:db": "node scripts/test-db.mjs",
+    "dev:demo": "vite --mode demo --port 5181",
+    "check": "tsc --noEmit && vitest run && vite build"
   },
   "dependencies": {
     "@fontsource/barlow-condensed": "^5.3.0",
@@ -24,6 +28,7 @@
     "@vitejs/plugin-react": "^6.2.1",
     "tailwindcss": "^4.3.5",
     "typescript": "^7.0.2",
-    "vite": "^8.3.6"
+    "vite": "^8.3.6",
+    "vitest": "^5.0.5"
   }
 }
