@@ -5,8 +5,9 @@ import { actions, APP_NAME, useData, useSync } from '../lib/store';
 import { useAuth } from '../lib/auth';
 import { isSupabaseConnected } from '../lib/supabase';
 import { toCSV } from '../lib/calc';
-import { todayISO } from '../lib/format';
+import { money, todayISO } from '../lib/format';
 import { ShellHeader, Page } from '../components/Layout';
+import { VehiclePicker } from '../components/VehiclePicker';
 import { Button, ConfirmButton, SectionTitle, TextField, downloadFile } from '../components/ui';
 
 export default function More() {
@@ -25,14 +26,27 @@ export default function More() {
         <SectionTitle>Business</SectionTitle>
         <div className="space-y-3 rounded-xl border border-line bg-surface p-4">
           <SavedField label="App / business name" value={data.settings.businessName} onSave={(v) => actions.updateSettings({ businessName: v || APP_NAME })} />
-          <SavedField
-            label="Default vehicle number"
+          <VehiclePicker
+            label="Default vehicle for trips"
             value={data.settings.defaultVehicle}
-            placeholder="KL 07 AB 1234"
-            hint="Filled in on every new trip."
-            onSave={(v) => actions.updateSettings({ defaultVehicle: v.toUpperCase() })}
+            onChange={(n) => actions.setDefaultVehicle(n)}
+            hint="Picked automatically on every new trip."
           />
         </div>
+
+        <SectionTitle>Partners</SectionTitle>
+        <Link to="/partners" className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 hover:border-ink-3">
+          <span className="flex items-center gap-3">
+            <Users size={20} className="text-ink-3" />
+            <span>
+              <span className="block font-semibold">Capital from partners</span>
+              <span className="block text-sm text-ink-3">
+                {money(data.capital.reduce((s, c) => s + c.amount, 0))} put in · add or edit entries
+              </span>
+            </span>
+          </span>
+          <ChevronRight size={20} className="shrink-0 text-ink-3" />
+        </Link>
 
         <SectionTitle>Partner names</SectionTitle>
         <div className="space-y-3 rounded-xl border border-line bg-surface p-4">

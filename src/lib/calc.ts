@@ -65,7 +65,7 @@ export function summarize(data: AppData, period: Period, today = todayISO()) {
   const received = done.reduce((s, t) => s + tripReceived(t), 0);
   const due = done.reduce((s, t) => s + tripDue(t), 0);
   const km = done.reduce((s, t) => s + (t.km || 0), 0);
-  const partnerPaid = expenses.reduce((s, e) => s + e.amount, 0);
+  const companyExpenses = expenses.reduce((s, e) => s + e.amount, 0);
   const tripProfitTotal = fares - tripCost;
 
   return {
@@ -80,8 +80,10 @@ export function summarize(data: AppData, period: Period, today = todayISO()) {
     due,
     tripCost,
     tripProfit: tripProfitTotal,
-    partnerPaid,
-    net: tripProfitTotal - partnerPaid,
+    /** Company costs outside trips (service, repairs, insurance…), by date. */
+    companyExpenses,
+    /** Trip profit minus company expenses. */
+    net: tripProfitTotal - companyExpenses,
   };
 }
 
@@ -112,13 +114,12 @@ export function tripsOnDay(data: AppData, day: string, today = todayISO()) {
     .sort(byStart);
 }
 
-/** Per-partner totals across all time (capital is cumulative). */
+/** Capital each partner has put in, across all time. */
 export function partnerTotals(data: AppData) {
-  return data.partners.map((p) => {
-    const capital = data.capital.filter((c) => c.partnerId === p.id).reduce((s, c) => s + c.amount, 0);
-    const paid = data.expenses.filter((e) => e.partnerId === p.id).reduce((s, e) => s + e.amount, 0);
-    return { partner: p, capital, paid, total: capital + paid };
-  });
+  return data.partners.map((p) => ({
+    partner: p,
+    capital: data.capital.filter((c) => c.partnerId === p.id).reduce((s, c) => s + c.amount, 0),
+  }));
 }
 
 /** Trips grouped by start date, newest first. Day totals count finished trips only. */

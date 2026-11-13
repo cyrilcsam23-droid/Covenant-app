@@ -14,7 +14,8 @@
 import { useSyncExternalStore } from 'react';
 import type { PostgrestError, RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from './supabase';
-import type { AppData, CapitalEntry, Partner, PartnerExpense, Settings, Trip, TripCost, TripCostType, TripPayment } from './types';
+import type { AppData, CapitalEntry, Expense, Partner, Settings, Trip, TripCost, TripCostType, TripPayment, Vehicle, VehicleItem } from './types';
+import { ITEM_TEMPLATES } from './vehicle';
 import { addDays, todayISO } from './format';
 
 const KEY = 'dropship:data:v1'; // demo-mode key; kept so saved data survives the rename
@@ -79,6 +80,8 @@ function emptyData(partners: Partner[] = defaultPartners()): AppData {
     trips: [],
     capital: [],
     expenses: [],
+    vehicles: [],
+    vehicleItems: [],
     settings: { businessName: APP_NAME, defaultVehicle: '' },
     isSample: false,
   };
@@ -131,7 +134,27 @@ export function normalizeTrip(raw: unknown): Trip {
   };
 }
 
-const normalizeData = (d: AppData): AppData => ({ ...d, trips: (d.trips ?? []).map(normalizeTrip) });
+const normalizeExpense = (raw: unknown): Expense => {
+  const e = (raw ?? {}) as Record<string, unknown>;
+  return {
+    id: String(e.id ?? uid()),
+    date: String(e.date ?? todayISO()),
+    amount: Number(e.amount) || 0,
+    category: String(e.category ?? 'Other'),
+    description: String(e.description ?? ''),
+    vehicleId: typeof e.vehicleId === 'string' ? e.vehicleId : null,
+    itemId: typeof e.itemId === 'string' ? e.itemId : null,
+    odometerKm: e.odometerKm == null ? null : Number(e.odometerKm),
+  };
+};
+
+const normalizeData = (d: AppData): AppData => ({
+  ...d,
+  trips: (d.trips ?? []).map(normalizeTrip),
+  expenses: (d.expenses ?? []).map(normalizeExpense),
+  vehicles: d.vehicles ?? [],
+  vehicleItems: d.vehicleItems ?? [],
+});
 
 /** Clearly-labelled sample data so the screens have something to show (demo mode only). */
 function sampleData(): AppData {
@@ -210,10 +233,42 @@ function sampleData(): AppData {
     { id: uid(), partnerId: 'p3', date: daysAgo(40), amount: 80000, note: 'Sample: initial capital' },
     { id: uid(), partnerId: 'p3', date: daysAgo(10), amount: 20000, note: 'Sample: added capital' },
   ];
+  const car: Vehicle = { id: uid(), number: v, name: 'Toyota Etios', odometerKm: null, odometerDate: null, position: 1 };
+  base.vehicles = [car];
+  const item = (name: string, o: Partial<VehicleItem>): VehicleItem => {
+    const t = ITEM_TEMPLATES.find((x) => x.name === name)!;
+    return {
+      id: uid(),
+      vehicleId: car.id,
+      kind: t.kind,
+      name,
+      everyKm: t.everyKm,
+      everyMonths: t.everyMonths,
+      lastKm: null,
+      lastDate: null,
+      dueDate: null,
+      remindKm: t.remindKm,
+      remindDays: t.remindDays,
+      position: ITEM_TEMPLATES.indexOf(t),
+      ...o,
+    };
+  };
+  const oil = item('Oil change', { lastKm: odo - 4700, lastDate: daysAgo(70) });
+  base.vehicleItems = [
+    item('Insurance', { dueDate: daysAgo(-9) }),
+    item('Pollution test (PUC)', { dueDate: daysAgo(-120) }),
+    item('Road tax', { dueDate: daysAgo(-48) }),
+    item('Permit', { dueDate: daysAgo(-900) }),
+    item('Fitness certificate', { dueDate: daysAgo(-210) }),
+    item('General service', { lastKm: odo - 6200, lastDate: daysAgo(70) }),
+    oil,
+    item('Tyre rotation', { lastKm: odo - 11200 }),
+  ];
   base.expenses = [
-    { id: uid(), partnerId: 'p1', date: daysAgo(6), amount: 4800, category: 'Maintenance', description: 'Sample: oil change and filter' },
-    { id: uid(), partnerId: 'p2', date: daysAgo(14), amount: 7600, category: 'Tyres', description: 'Sample: two front tyres' },
-    { id: uid(), partnerId: 'p3', date: daysAgo(2), amount: 1200, category: 'Repair', description: 'Sample: wiper and bulb' },
+    { id: uid(), date: daysAgo(70), amount: 3800, category: 'Service', description: 'Sample: oil change and filter', vehicleId: car.id, itemId: oil.id, odometerKm: odo - 4700 },
+    { id: uid(), date: daysAgo(14), amount: 7600, category: 'Tyres', description: 'Sample: two front tyres', vehicleId: car.id, itemId: null, odometerKm: null },
+    { id: uid(), date: daysAgo(6), amount: 15000, category: 'Driver salary', description: 'Sample: driver salary', vehicleId: null, itemId: null, odometerKm: null },
+    { id: uid(), date: daysAgo(2), amount: 1200, category: 'Repair', description: 'Sample: wiper and bulb', vehicleId: car.id, itemId: null, odometerKm: null },
   ];
   base.settings.defaultVehicle = v;
   base.isSample = true;
@@ -251,8 +306,12 @@ type Change =
   | { type: 'trip.delete'; id: string }
   | { type: 'capital.save'; entry: CapitalEntry; isNew: boolean }
   | { type: 'capital.delete'; id: string }
-  | { type: 'expense.save'; entry: PartnerExpense; isNew: boolean }
+  | { type: 'expense.save'; entry: Expense; isNew: boolean }
   | { type: 'expense.delete'; id: string }
+  | { type: 'vehicle.save'; vehicle: Vehicle; isNew: boolean }
+  | { type: 'vehicle.delete'; id: string }
+  | { type: 'item.save'; item: VehicleItem; isNew: boolean }
+  | { type: 'item.delete'; id: string }
   | { type: 'partner.save'; partner: Partner; isNew: boolean }
   | { type: 'settings'; patch: Partial<Settings> };
 
@@ -273,6 +332,24 @@ function apply(s: AppData, c: Change): AppData {
       return c.isNew || s.expenses.some((x) => x.id === c.entry.id) ? { ...s, expenses: upsertById(s.expenses, c.entry) } : s;
     case 'expense.delete':
       return { ...s, expenses: s.expenses.filter((x) => x.id !== c.id) };
+    case 'vehicle.save':
+      return c.isNew || s.vehicles.some((x) => x.id === c.vehicle.id) ? { ...s, vehicles: upsertById(s.vehicles, c.vehicle) } : s;
+    case 'vehicle.delete':
+      // Same as the database: its reminders go, its expenses stay (unlinked).
+      return {
+        ...s,
+        vehicles: s.vehicles.filter((x) => x.id !== c.id),
+        vehicleItems: s.vehicleItems.filter((x) => x.vehicleId !== c.id),
+        expenses: s.expenses.map((e) => (e.vehicleId === c.id ? { ...e, vehicleId: null, itemId: null } : e)),
+      };
+    case 'item.save':
+      return c.isNew || s.vehicleItems.some((x) => x.id === c.item.id) ? { ...s, vehicleItems: upsertById(s.vehicleItems, c.item) } : s;
+    case 'item.delete':
+      return {
+        ...s,
+        vehicleItems: s.vehicleItems.filter((x) => x.id !== c.id),
+        expenses: s.expenses.map((e) => (e.itemId === c.id ? { ...e, itemId: null } : e)),
+      };
     case 'partner.save':
       return { ...s, partners: upsertById(s.partners, c.partner) };
     case 'settings':
@@ -287,6 +364,10 @@ const LABEL: Record<Change['type'], string> = {
   'capital.delete': 'Capital delete',
   'expense.save': 'Expense',
   'expense.delete': 'Expense delete',
+  'vehicle.save': 'Vehicle',
+  'vehicle.delete': 'Vehicle delete',
+  'item.save': 'Reminder',
+  'item.delete': 'Reminder delete',
   'partner.save': 'Partner name',
   settings: 'Setting',
 };
@@ -396,21 +477,70 @@ const capitalFromRow = (r: Row): CapitalEntry => ({
   note: s(r.note),
 });
 const capitalToRow = (c: CapitalEntry) => ({ id: c.id, partner_id: c.partnerId, entry_date: c.date, amount: c.amount, note: c.note });
-const expenseFromRow = (r: Row): PartnerExpense => ({
+export const expenseFromRow = (r: Row): Expense => ({
   id: s(r.id),
-  partnerId: s(r.partner_id),
   date: s(r.expense_date),
   amount: n(r.amount),
   category: s(r.category),
   description: s(r.description),
+  vehicleId: typeof r.vehicle_id === 'string' ? r.vehicle_id : null,
+  itemId: typeof r.item_id === 'string' ? r.item_id : null,
+  odometerKm: nOrNull(r.odometer_km),
 });
-const expenseToRow = (e: PartnerExpense) => ({
+export const expenseToRow = (e: Expense) => ({
   id: e.id,
-  partner_id: e.partnerId,
   expense_date: e.date,
   amount: e.amount,
   category: e.category,
   description: e.description,
+  vehicle_id: e.vehicleId,
+  item_id: e.itemId,
+  odometer_km: e.odometerKm,
+});
+export const vehicleFromRow = (r: Row): Vehicle => ({
+  id: s(r.id),
+  number: s(r.number),
+  name: s(r.name),
+  odometerKm: nOrNull(r.odometer_km),
+  odometerDate: typeof r.odometer_date === 'string' ? r.odometer_date : null,
+  position: n(r.position),
+});
+export const vehicleToRow = (v: Vehicle) => ({
+  id: v.id,
+  number: v.number,
+  name: v.name,
+  odometer_km: v.odometerKm,
+  odometer_date: v.odometerDate,
+  position: v.position,
+});
+const intOrNull = (v: unknown) => (v === null || v === undefined ? null : Math.round(Number(v)));
+export const itemFromRow = (r: Row): VehicleItem => ({
+  id: s(r.id),
+  vehicleId: s(r.vehicle_id),
+  kind: r.kind === 'paper' ? 'paper' : 'service',
+  name: s(r.name),
+  everyKm: intOrNull(r.every_km),
+  everyMonths: intOrNull(r.every_months),
+  lastKm: nOrNull(r.last_km),
+  lastDate: typeof r.last_date === 'string' ? r.last_date : null,
+  dueDate: typeof r.due_date === 'string' ? r.due_date : null,
+  remindKm: n(r.remind_km),
+  remindDays: n(r.remind_days),
+  position: n(r.position),
+});
+export const itemToRow = (i: VehicleItem) => ({
+  id: i.id,
+  vehicle_id: i.vehicleId,
+  kind: i.kind,
+  name: i.name,
+  every_km: i.everyKm,
+  every_months: i.everyMonths,
+  last_km: i.lastKm,
+  last_date: i.lastDate,
+  due_date: i.dueDate,
+  remind_km: i.remindKm,
+  remind_days: i.remindDays,
+  position: i.position,
 });
 const settingsToRow = (p: Partial<Settings>) => ({
   ...(p.businessName !== undefined ? { business_name: p.businessName } : {}),
@@ -459,10 +589,22 @@ async function send(c: Change): Promise<SendResult> {
         return result(await db.from('capital_entries').delete().eq('id', c.id));
       case 'expense.save':
         return c.isNew
-          ? result(await db.from('partner_expenses').insert(expenseToRow(c.entry)), true)
-          : result(await db.from('partner_expenses').update(expenseToRow(c.entry)).eq('id', c.entry.id));
+          ? result(await db.from('expenses').insert(expenseToRow(c.entry)), true)
+          : result(await db.from('expenses').update(expenseToRow(c.entry)).eq('id', c.entry.id));
       case 'expense.delete':
-        return result(await db.from('partner_expenses').delete().eq('id', c.id));
+        return result(await db.from('expenses').delete().eq('id', c.id));
+      case 'vehicle.save':
+        return c.isNew
+          ? result(await db.from('vehicles').insert(vehicleToRow(c.vehicle)), true)
+          : result(await db.from('vehicles').update(vehicleToRow(c.vehicle)).eq('id', c.vehicle.id));
+      case 'vehicle.delete':
+        return result(await db.from('vehicles').delete().eq('id', c.id));
+      case 'item.save':
+        return c.isNew
+          ? result(await db.from('vehicle_items').insert(itemToRow(c.item)), true)
+          : result(await db.from('vehicle_items').update(itemToRow(c.item)).eq('id', c.item.id));
+      case 'item.delete':
+        return result(await db.from('vehicle_items').delete().eq('id', c.id));
       case 'partner.save': {
         const row = { id: c.partner.id, name: c.partner.name, position: c.partner.position ?? 0 };
         return c.isNew
@@ -549,11 +691,13 @@ async function refresh() {
   refreshing = true;
   const id = userId;
   try {
-    const [partners, trips, capital, expenses, settingsRes] = await Promise.all([
+    const [partners, trips, capital, expenses, vehicles, items, settingsRes] = await Promise.all([
       fetchAll('partners', 'position'),
       fetchAll('trips', 'created_at'),
       fetchAll('capital_entries', 'created_at'),
-      fetchAll('partner_expenses', 'created_at'),
+      fetchAll('expenses', 'created_at'),
+      fetchAll('vehicles', 'position'),
+      fetchAll('vehicle_items', 'position'),
       supabase.from('app_settings').select('business_name, default_vehicle').eq('id', 1).maybeSingle(),
     ]);
     if (settingsRes.error) throw Object.assign(new Error(settingsRes.error.message), { status: settingsRes.status });
@@ -564,6 +708,8 @@ async function refresh() {
       trips: trips.map(tripFromRow),
       capital: capital.map(capitalFromRow),
       expenses: expenses.map(expenseFromRow),
+      vehicles: vehicles.map(vehicleFromRow),
+      vehicleItems: items.map(itemFromRow),
       settings: { businessName: s(row?.business_name) || APP_NAME, defaultVehicle: s(row?.default_vehicle) },
       isSample: false,
     };
@@ -700,11 +846,82 @@ export const actions = {
   deleteCapital(id: string) {
     dispatch({ type: 'capital.delete', id });
   },
-  saveExpense(input: Omit<PartnerExpense, 'id'>, id?: string) {
-    dispatch({ type: 'expense.save', entry: { ...input, id: id ?? uid() }, isNew: !id });
+  /**
+   * Saves a company expense. If it completes a reminder (oil change done, insurance
+   * renewed…), that reminder restarts from this date and odometer, or takes the new
+   * "valid until" date for a paper.
+   */
+  saveExpense(input: Omit<Expense, 'id'>, id?: string, renewal?: { validUntil?: string | null }): string {
+    const entry: Expense = { ...input, id: id ?? uid() };
+    dispatch({ type: 'expense.save', entry, isNew: !id });
+    const item = input.itemId ? state.vehicleItems.find((i) => i.id === input.itemId) : undefined;
+    if (item) {
+      const next: VehicleItem =
+        item.kind === 'paper'
+          ? { ...item, lastDate: input.date, dueDate: renewal?.validUntil ?? item.dueDate }
+          : { ...item, lastDate: input.date, lastKm: input.odometerKm ?? item.lastKm };
+      dispatch({ type: 'item.save', item: next, isNew: false });
+    }
+    return entry.id;
   },
   deleteExpense(id: string) {
     dispatch({ type: 'expense.delete', id });
+  },
+  /** Adds or updates a vehicle; returns its id. A new vehicle gets the chosen reminders. */
+  saveVehicle(input: Omit<Vehicle, 'id' | 'position'>, id?: string, templates: string[] = []): string {
+    const existing = id ? state.vehicles.find((x) => x.id === id) : undefined;
+    const vehicle: Vehicle = existing
+      ? { ...existing, ...input }
+      : { ...input, id: uid(), position: state.vehicles.reduce((m, x) => Math.max(m, x.position), 0) + 1 };
+    dispatch({ type: 'vehicle.save', vehicle, isNew: !existing });
+    if (!existing) {
+      for (const name of templates) {
+        const t = ITEM_TEMPLATES.find((x) => x.name === name);
+        if (!t) continue;
+        dispatch({
+          type: 'item.save',
+          isNew: true,
+          item: {
+            id: uid(),
+            vehicleId: vehicle.id,
+            kind: t.kind,
+            name: t.name,
+            everyKm: t.everyKm,
+            everyMonths: t.everyMonths,
+            lastKm: null,
+            lastDate: null,
+            dueDate: null,
+            remindKm: t.remindKm,
+            remindDays: t.remindDays,
+            position: ITEM_TEMPLATES.indexOf(t),
+          },
+        });
+      }
+    }
+    // The first vehicle becomes the default for new trips.
+    if (!state.settings.defaultVehicle) dispatch({ type: 'settings', patch: { defaultVehicle: vehicle.number } });
+    return vehicle.id;
+  },
+  deleteVehicle(id: string) {
+    const v = state.vehicles.find((x) => x.id === id);
+    dispatch({ type: 'vehicle.delete', id });
+    if (v && state.settings.defaultVehicle === v.number) {
+      dispatch({ type: 'settings', patch: { defaultVehicle: state.vehicles[0]?.number ?? '' } });
+    }
+  },
+  setDefaultVehicle(number: string) {
+    dispatch({ type: 'settings', patch: { defaultVehicle: number } });
+  },
+  saveItem(input: Omit<VehicleItem, 'id' | 'position'>, id?: string): string {
+    const existing = id ? state.vehicleItems.find((x) => x.id === id) : undefined;
+    const item: VehicleItem = existing
+      ? { ...existing, ...input }
+      : { ...input, id: uid(), position: state.vehicleItems.filter((x) => x.vehicleId === input.vehicleId).length + 100 };
+    dispatch({ type: 'item.save', item, isNew: !existing });
+    return item.id;
+  },
+  deleteItem(id: string) {
+    dispatch({ type: 'item.delete', id });
   },
   renamePartner(id: string, name: string) {
     const p = state.partners.find((x) => x.id === id);

@@ -34,8 +34,15 @@ A "daily dropship" ledger: for each date, record the trip(s) the vehicle did (fr
 - **Money rules:** profit = fare − expenses, counted on the full fare, so money owed still counts. Due = fare − payments, shown as "To collect".
 - **Status and totals:** a trip is Upcoming, On trip or Completed, worked out from its dates. Totals count completed trips only, under their **start date**.
 - **Bookings:** future trips are listed under Upcoming and in a calendar. "Add to phone calendar" downloads an .ics event that reminds at 6 pm the evening before and 7 am on the day.
-- Partner capital: dated entries per partner, added over time. Starting amounts are unequal/unknown: start at zero, partners enter their own.
-- Partner-paid expenses: date, partner, amount, description (maintenance, repairs, etc.).
+- **Partner capital** (under More): dated entries per partner, added over time. Starting amounts are unequal or unknown, so each starts at zero and partners enter their own. Partners record capital only.
+- **Company expenses** (Expenses tab): costs outside trips, such as service, repairs, tyres, fuel, insurance, pollution test, tax and permit, driver salary, loan EMI and cleaning. Each has an optional vehicle and odometer reading. There is no "paid by": every expense is a company cost. Net = trip profit − company expenses.
+- **Vehicles** (Vehicle tab):
+  - One record per vehicle: registration number, model and odometer. A trip's end km updates the odometer automatically.
+  - **Default vehicle:** chosen from a dropdown of saved vehicles and pre-selected on new trips.
+  - **Papers** (insurance, pollution test, road tax, permit, fitness) have a valid-until date and a renewal period.
+  - **Service reminders** repeat every N km and/or N months, whichever comes first.
+  - **Done** or **Renewed** records the expense and restarts the reminder. Overdue and due-soon reminders also show on Home.
+  - A paper's expiry can be added to the phone calendar.
 - Accounts: Supabase email and password. Public sign-up is off. Logins must be approved, and admins manage them from More → Manage logins. Forgot password is available on the sign-in screen.
 - App name: Covenant (editable in More). Open: whether partner-paid expenses are reimbursed or treated as extra capital.
 

@@ -178,6 +178,20 @@ Flat and tonal. Depth comes from the charcoal shell against the light ground, an
 - **Switch:** a 40×28 track that is plate yellow with an ink rim when on (active state) and grey when off, with an ink knob. It is used for "End date not known yet" and "Add to my phone calendar".
 - **Calendar:** a 7-column month grid starting on Sunday, with Barlow day numbers. Dots mark the days with trips: filled for a trip, a ring for a booking. The selected day is a yellow plate tile, and today has an ink ring. The day's trips are listed below the grid.
 - **To collect row:** route, dates and customer, "Received ₹X of ₹Y", and the due in Barlow on the right. Underneath are actions: "Call Rajesh" (a tel: link) and "Mark ₹4,000 received" (two-tap confirm).
+- **Tab bar:** five tabs: Home, Trips, Vehicle, Expenses, More. Partners lives under More.
+- **Vehicle dashboard:**
+  - **Charcoal header:** the registration number as a plate (KL 39 Y 0770 layout), the model, and "Default for trips". A summary line reads "1 overdue · 2 due soon".
+  - **Odometer:** a tappable panel ("50,063 km · From the trip on 13 Nov"), plus a 3-column strip: km this month, fares, spent on it.
+  - **Body:** **Papers** and **Service** groups, each sorted most urgent first, then **Recent costs**.
+- **Reminder row:** the name with a state tag, the due line ("Valid until 22 Nov 2026 · 9 days left", "Next at 50,369 km · 306 km to go"), and the schedule ("Every 5,000 km or 6 months").
+  - The right-hand button reads **Done** (service) or **Renewed** (paper). It is charcoal when the reminder is overdue or due soon, and outlined otherwise.
+  - **State tags:**
+    - **Overdue:** red with white text. This is the only place outside losses where red appears, because it is a real problem state.
+    - **Due soon:** ink outline on white. Yellow stays reserved.
+    - **Not set:** grey.
+- **Choice chips:** pills where the chosen one is charcoal, or plate yellow on the charcoal header. Used for expense type, vehicle, partner and "Does it complete a reminder?".
+- **Vehicle dropdown:** a native select in Barlow with plate letter-spacing. A number that is no longer saved stays selectable as "(not saved)", so editing an old trip never changes its vehicle.
+- **Checklist rows (Add vehicle):** a 24px square tick that is charcoal when on, the name, and a "Paper · renew every 1 yr" line.
 - **Delete:** two-tap confirm ("Tap again to delete"), never a modal.
 - **Inputs:** 48px tall. Money fields have a ₹ prefix, decimal keypad, and Barlow figures. Focus shows a charcoal border with a yellow halo.
 

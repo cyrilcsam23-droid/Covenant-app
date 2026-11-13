@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useLocation, useRoutes } from 'react-router-dom';
+import { Navigate, useLocation, useParams, useRoutes } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useAuth } from './lib/auth';
 import { isMisconfigured, useSync } from './lib/store';
@@ -12,6 +12,11 @@ import Trips from './pages/Trips';
 import TripForm from './pages/TripForm';
 import Partners from './pages/Partners';
 import EntryForm from './pages/EntryForm';
+import Vehicles from './pages/Vehicles';
+import VehicleForm from './pages/VehicleForm';
+import ItemForm from './pages/ItemForm';
+import Expenses from './pages/Expenses';
+import ExpenseForm from './pages/ExpenseForm';
 import More from './pages/More';
 import Logins from './pages/Logins';
 import Login from './pages/Login';
@@ -22,16 +27,31 @@ const routes = [
   { path: '/trips/new', element: <TripForm /> },
   { path: '/trips/:id', element: <TripForm key="edit" /> },
   { path: '/partners', element: <Partners /> },
-  { path: '/partners/capital/new', element: <EntryForm kind="capital" /> },
-  { path: '/partners/capital/:id', element: <EntryForm kind="capital" /> },
-  { path: '/partners/expense/new', element: <EntryForm kind="expense" /> },
-  { path: '/partners/expense/:id', element: <EntryForm kind="expense" /> },
+  { path: '/partners/capital/new', element: <EntryForm /> },
+  { path: '/partners/capital/:id', element: <EntryForm key="edit" /> },
+  // Older links to partner-paid expenses now open the company expense.
+  { path: '/partners/expense/new', element: <Navigate to="/expenses/new" replace /> },
+  { path: '/partners/expense/:id', element: <LegacyExpense /> },
+  { path: '/vehicles', element: <Vehicles /> },
+  { path: '/vehicles/new', element: <VehicleForm /> },
+  { path: '/vehicles/:id', element: <VehicleForm key="edit" /> },
+  { path: '/vehicles/:vid/items/new', element: <ItemForm /> },
+  { path: '/vehicles/:vid/items/:iid', element: <ItemForm key="edit" /> },
+  { path: '/expenses', element: <Expenses /> },
+  { path: '/expenses/new', element: <ExpenseForm /> },
+  { path: '/expenses/:id', element: <ExpenseForm key="edit" /> },
   { path: '/more', element: <More /> },
   { path: '/more/logins', element: <Logins /> },
   { path: '*', element: <Home /> },
 ];
 
-const isFormRoute = (path: string) => /^\/(trips|partners\/(capital|expense)|more)\/[^/]+$/.test(path);
+/** Full-screen forms: no tab bar. */
+const isFormRoute = (path: string) => /^\/(trips|partners\/(capital|expense)|more|expenses|vehicles)\/.+$/.test(path);
+
+function LegacyExpense() {
+  const { id } = useParams();
+  return <Navigate to={`/expenses/${id}`} replace />;
+}
 
 export default function App() {
   const { session, loading, recovering } = useAuth();

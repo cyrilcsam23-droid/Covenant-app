@@ -7,6 +7,7 @@ import { addTripToPhoneCalendar } from '../lib/calendarFile';
 import { TRIP_COST_TYPES, type Trip, type TripCostType, type TripPayment } from '../lib/types';
 import { addDays, daysBetween, fmtDay, money, monthOf, toNum, todayISO } from '../lib/format';
 import { ResultPlate } from '../components/Plate';
+import { VehiclePicker } from '../components/VehiclePicker';
 import { Button, ConfirmButton, Empty, Field, FormBar, MoneyField, Segmented, TextField } from '../components/ui';
 
 const MAIN_TYPES: TripCostType[] = ['Fuel', 'Toll', 'Parking'];
@@ -48,7 +49,6 @@ export default function TripForm() {
   const existing = live ?? snapshot.current;
 
   const places = useMemo(() => [...new Set(data.trips.flatMap((t) => [t.from, t.to]).filter(Boolean))].sort(), [data.trips]);
-  const vehicles = useMemo(() => [...new Set(data.trips.map((t) => t.vehicle).filter(Boolean))], [data.trips]);
 
   const [f, setF] = useState(() => {
     const advances = existing?.payments.filter((p) => p.kind === 'advance') ?? [];
@@ -211,11 +211,6 @@ export default function TripForm() {
             <option key={p} value={p} />
           ))}
         </datalist>
-        <datalist id="vehicles">
-          {vehicles.map((v) => (
-            <option key={v} value={v} />
-          ))}
-        </datalist>
 
         {/* ---------------------------------------------------------- when */}
         <Section title="When">
@@ -296,15 +291,7 @@ export default function TripForm() {
 
         {/* ---------------------------------------------------------- route */}
         <Section title="Route">
-          <TextField
-            label="Vehicle"
-            list="vehicles"
-            value={f.vehicle}
-            onChange={(e) => set('vehicle')(e.target.value)}
-            placeholder="KL 07 AB 1234"
-            autoCapitalize="characters"
-            maxLength={30}
-          />
+          <VehiclePicker label="Vehicle" value={f.vehicle} onChange={set('vehicle')} allowNone />
           <div className="mt-3 flex gap-2">
             <div className="min-w-0 flex-1 space-y-3">
               <TextField label="From" list="places" value={f.from} onChange={(e) => set('from')(e.target.value)} placeholder="Pickup place" error={errors.from} autoComplete="off" maxLength={120} />

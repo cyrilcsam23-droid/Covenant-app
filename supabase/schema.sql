@@ -127,9 +127,55 @@ create table if not exists capital_entries (
   created_at timestamptz not null default now()
 );
 
-create table if not exists partner_expenses (
+-- Vehicles and what each one needs: service reminders (every X km and/or months) and
+-- papers with an expiry date (insurance, pollution test, tax, permit, fitness).
+create table if not exists vehicles (
   id uuid primary key default gen_random_uuid(),
-  partner_id uuid not null references partners(id) on delete restrict,
+  number text not null,                      -- registration, e.g. KL 39 Y 0770
+  name text not null default '',             -- model / nickname
+  odometer_km numeric(10,1),                 -- last reading entered by hand
+  odometer_date date,
+  position int not null default 0,
+  created_by uuid references auth.users(id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz,
+  updated_by uuid references auth.users(id)
+);
+create unique index if not exists vehicles_number_key on vehicles (upper(regexp_replace(number, '\s', '', 'g')));
+
+create table if not exists vehicle_items (
+  id uuid primary key default gen_random_uuid(),
+  vehicle_id uuid not null references vehicles(id) on delete cascade,
+  kind text not null default 'service',      -- 'service' (km / months) or 'paper' (expiry date)
+  name text not null,
+  every_km int,                              -- service: repeat every N km
+  every_months int,                          -- repeat every N months (service) / renewal period (paper)
+  last_km numeric(10,1),                     -- service: odometer when last done
+  last_date date,                            -- service: date last done
+  due_date date,                             -- paper: valid until
+  remind_km int not null default 500,        -- warn this many km before
+  remind_days int not null default 15,       -- warn this many days before
+  position int not null default 0,
+  created_by uuid references auth.users(id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz,
+  updated_by uuid references auth.users(id)
+);
+create index if not exists vehicle_items_vehicle_idx on vehicle_items (vehicle_id);
+
+-- Business expenses outside trips. Paid by the business, or by a partner from their own
+-- pocket (partner_id), which counts towards that partner's total. Can belong to a vehicle,
+-- and can complete a service reminder (item_id + odometer_km).
+-- One-time rename from the first version's partner_expenses table.
+do $$
+begin
+  if to_regclass('public.partner_expenses') is not null and to_regclass('public.expenses') is null then
+    alter table public.partner_expenses rename to expenses;
+  end if;
+end $$;
+create table if not exists expenses (
+  id uuid primary key default gen_random_uuid(),
+  partner_id uuid references partners(id) on delete restrict,
   expense_date date not null default current_date,
   amount numeric(12,2) not null check (amount > 0),
   category text not null default 'Other',
@@ -137,6 +183,13 @@ create table if not exists partner_expenses (
   created_by uuid references auth.users(id) default auth.uid(),
   created_at timestamptz not null default now()
 );
+alter table expenses alter column partner_id drop not null;
+alter table expenses
+  add column if not exists vehicle_id uuid references vehicles(id) on delete set null,
+  add column if not exists item_id uuid references vehicle_items(id) on delete set null,
+  add column if not exists odometer_km numeric(10,1);
+create index if not exists expenses_vehicle_idx on expenses (vehicle_id);
+alter table expenses drop constraint if exists expense_category_ok;
 
 create table if not exists app_settings (
   id int primary key default 1 check (id = 1),
@@ -154,12 +207,12 @@ create table if not exists app_members (
 alter table app_members add column if not exists role text not null default 'partner';
 
 create index if not exists capital_entries_partner_idx on capital_entries (partner_id);
-create index if not exists partner_expenses_partner_idx on partner_expenses (partner_id);
+create index if not exists partner_expenses_partner_idx on expenses (partner_id);
 
 -- Audit columns: who last changed an entry, and when.
 alter table trips            add column if not exists updated_at timestamptz, add column if not exists updated_by uuid references auth.users(id);
 alter table capital_entries  add column if not exists updated_at timestamptz, add column if not exists updated_by uuid references auth.users(id);
-alter table partner_expenses add column if not exists updated_at timestamptz, add column if not exists updated_by uuid references auth.users(id);
+alter table expenses add column if not exists updated_at timestamptz, add column if not exists updated_by uuid references auth.users(id);
 
 -- ---------------------------------------------------------------- value checks
 
@@ -176,8 +229,16 @@ begin
       ('trips', 'trips_text_ok', 'check (char_length(btrim(from_place)) between 1 and 120 and char_length(btrim(to_place)) between 1 and 120 and char_length(vehicle) <= 30 and char_length(notes) <= 1000)'),
       ('trips', 'trips_date_ok', 'check (trip_date >= date ''2000-01-01'')'),
       ('capital_entries', 'capital_text_ok', 'check (char_length(note) <= 500 and entry_date >= date ''2000-01-01'')'),
-      ('partner_expenses', 'expense_text_ok', 'check (char_length(btrim(description)) between 1 and 500 and expense_date >= date ''2000-01-01'')'),
-      ('partner_expenses', 'expense_category_ok', 'check (category in (''Maintenance'', ''Repair'', ''Tyres'', ''Insurance'', ''Tax / permit'', ''Other''))'),
+      ('expenses', 'expense_text_ok', 'check (char_length(btrim(description)) between 1 and 500 and expense_date >= date ''2000-01-01'')'),
+      ('expenses', 'expense_category_v2', 'check (category in (''Service'', ''Repair'', ''Tyres'', ''Insurance'', ''Pollution test'', ''Tax / permit'', ''Fuel'', ''Driver salary'', ''Loan / EMI'', ''Cleaning'', ''Maintenance'', ''Other''))'),
+      ('expenses', 'expense_odometer_ok', 'check (odometer_km is null or (odometer_km >= 0 and odometer_km < 10000000))'),
+      ('vehicles', 'vehicle_text_ok', 'check (char_length(btrim(number)) between 1 and 20 and char_length(name) <= 60)'),
+      ('vehicles', 'vehicle_odometer_ok', 'check (odometer_km is null or (odometer_km >= 0 and odometer_km < 10000000))'),
+      ('vehicle_items', 'item_kind_ok', 'check (kind in (''service'', ''paper''))'),
+      ('vehicle_items', 'item_text_ok', 'check (char_length(btrim(name)) between 1 and 60)'),
+      ('vehicle_items', 'item_interval_ok', 'check ((every_km is null or every_km between 100 and 500000) and (every_months is null or every_months between 1 and 240))'),
+      ('vehicle_items', 'item_has_schedule', 'check (every_km is not null or every_months is not null or due_date is not null)'),
+      ('vehicle_items', 'item_reminder_ok', 'check (remind_km between 0 and 20000 and remind_days between 0 and 365 and (last_km is null or last_km >= 0))'),
       ('partners', 'partner_name_ok', 'check (char_length(btrim(name)) between 1 and 60)'),
       ('app_settings', 'settings_text_ok', 'check (char_length(btrim(business_name)) between 1 and 60 and char_length(default_vehicle) <= 30)'),
       ('app_members', 'member_role_ok', 'check (role in (''admin'', ''partner''))')
@@ -221,10 +282,14 @@ revoke all on function public.stamp_row() from public, anon, authenticated;
 
 drop trigger if exists stamp_row on trips;
 drop trigger if exists stamp_row on capital_entries;
-drop trigger if exists stamp_row on partner_expenses;
+drop trigger if exists stamp_row on expenses;
+drop trigger if exists stamp_row on vehicles;
+drop trigger if exists stamp_row on vehicle_items;
 create trigger stamp_row before insert or update on trips            for each row execute function public.stamp_row();
 create trigger stamp_row before insert or update on capital_entries  for each row execute function public.stamp_row();
-create trigger stamp_row before insert or update on partner_expenses for each row execute function public.stamp_row();
+create trigger stamp_row before insert or update on expenses for each row execute function public.stamp_row();
+create trigger stamp_row before insert or update on vehicles for each row execute function public.stamp_row();
+create trigger stamp_row before insert or update on vehicle_items for each row execute function public.stamp_row();
 
 -- Per-partner totals
 create or replace view partner_summary with (security_invoker = true) as
@@ -232,7 +297,7 @@ select
   p.id,
   p.name,
   coalesce((select sum(amount) from capital_entries c where c.partner_id = p.id), 0) as capital,
-  coalesce((select sum(amount) from partner_expenses e where e.partner_id = p.id), 0) as expenses_paid
+  coalesce((select sum(amount) from expenses e where e.partner_id = p.id), 0) as expenses_paid
 from partners p;
 
 -- ---------------------------------------------------------------- access rules
@@ -240,7 +305,9 @@ from partners p;
 alter table partners enable row level security;
 alter table trips enable row level security;
 alter table capital_entries enable row level security;
-alter table partner_expenses enable row level security;
+alter table expenses enable row level security;
+alter table vehicles enable row level security;
+alter table vehicle_items enable row level security;
 alter table app_settings enable row level security;
 alter table app_members enable row level security;
 
@@ -248,13 +315,15 @@ alter table app_members enable row level security;
 drop policy if exists "partners: signed in" on partners;
 drop policy if exists "trips: signed in" on trips;
 drop policy if exists "capital: signed in" on capital_entries;
-drop policy if exists "expenses: signed in" on partner_expenses;
+drop policy if exists "expenses: signed in" on expenses;
 drop policy if exists "settings: signed in" on app_settings;
 
 drop policy if exists "partners: members" on partners;
 drop policy if exists "trips: members" on trips;
 drop policy if exists "capital: members" on capital_entries;
-drop policy if exists "expenses: members" on partner_expenses;
+drop policy if exists "expenses: members" on expenses;
+drop policy if exists "vehicles: members" on vehicles;
+drop policy if exists "vehicle items: members" on vehicle_items;
 drop policy if exists "settings: members" on app_settings;
 drop policy if exists "members: see own row" on app_members;
 
@@ -264,7 +333,11 @@ create policy "trips: members" on trips for all to authenticated
   using ((select public.is_member())) with check ((select public.is_member()));
 create policy "capital: members" on capital_entries for all to authenticated
   using ((select public.is_member())) with check ((select public.is_member()));
-create policy "expenses: members" on partner_expenses for all to authenticated
+create policy "expenses: members" on expenses for all to authenticated
+  using ((select public.is_member())) with check ((select public.is_member()));
+create policy "vehicles: members" on vehicles for all to authenticated
+  using ((select public.is_member())) with check ((select public.is_member()));
+create policy "vehicle items: members" on vehicle_items for all to authenticated
   using ((select public.is_member())) with check ((select public.is_member()));
 -- Settings: one fixed row that can be read and changed, never deleted or added to.
 create policy "settings: members" on app_settings for select to authenticated using ((select public.is_member()));
@@ -276,11 +349,11 @@ create policy "members: see own row" on app_members for select to authenticated 
 
 -- Table privileges: signed-out visitors get nothing; signed-in users get only what
 -- the app needs (RLS above still decides which rows).
-revoke all on partners, trips, capital_entries, partner_expenses, app_settings, app_members, partner_summary from anon;
-revoke all on partners, trips, capital_entries, partner_expenses, app_settings, app_members, partner_summary from authenticated;
+revoke all on partners, trips, capital_entries, expenses, vehicles, vehicle_items, app_settings, app_members, partner_summary from anon;
+revoke all on partners, trips, capital_entries, expenses, vehicles, vehicle_items, app_settings, app_members, partner_summary from authenticated;
 grant usage on schema public to authenticated;
 grant select, insert, update on partners to authenticated;
-grant select, insert, update, delete on trips, capital_entries, partner_expenses to authenticated;
+grant select, insert, update, delete on trips, capital_entries, expenses, vehicles, vehicle_items to authenticated;
 grant select, update on app_settings to authenticated;
 grant select on app_members, partner_summary to authenticated;
 
@@ -290,7 +363,7 @@ grant select on app_members, partner_summary to authenticated;
 do $$
 declare t text;
 begin
-  foreach t in array array['partners', 'trips', 'capital_entries', 'partner_expenses', 'app_settings'] loop
+  foreach t in array array['partners', 'trips', 'capital_entries', 'expenses', 'vehicles', 'vehicle_items', 'app_settings'] loop
     if not exists (
       select 1 from pg_publication_tables
       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
@@ -307,3 +380,16 @@ insert into partners (name, position)
 select v.name, v.position
 from (values ('Partner 1', 1), ('Partner 2', 2), ('Partner 3', 3)) as v(name, position)
 where not exists (select 1 from partners);
+
+-- Vehicles already used on trips (or set as default) get a vehicle record, once.
+insert into vehicles (number, position)
+select v.number, row_number() over (order by v.number)
+from (
+  select distinct upper(btrim(vehicle)) as number from trips where btrim(vehicle) <> ''
+  union
+  select upper(btrim(default_vehicle)) from app_settings where btrim(default_vehicle) <> ''
+) v
+where not exists (
+  select 1 from vehicles x
+  where upper(regexp_replace(x.number, '\s', '', 'g')) = upper(regexp_replace(v.number, '\s', '', 'g'))
+);

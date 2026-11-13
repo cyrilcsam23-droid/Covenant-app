@@ -52,13 +52,51 @@ export interface CapitalEntry {
   note: string;
 }
 
-export interface PartnerExpense {
+/** A company cost outside trips (service, repairs, insurance, salary…). */
+export interface Expense {
   id: string;
-  partnerId: string;
   date: string;
   amount: number;
   category: string;
   description: string;
+  /** The vehicle it was for, if any. */
+  vehicleId: string | null;
+  /** The reminder it completed (e.g. "Oil change"), if any. */
+  itemId: string | null;
+  /** Odometer when it was done (service). */
+  odometerKm: number | null;
+}
+
+export interface Vehicle {
+  id: string;
+  /** Registration number, e.g. "KL 39 Y 0770". */
+  number: string;
+  /** Model or nickname. */
+  name: string;
+  /** Last odometer reading typed in by hand (trips also update the reading). */
+  odometerKm: number | null;
+  odometerDate: string | null;
+  position: number;
+}
+
+/**
+ * Something a vehicle needs regularly.
+ * - service: every N km and/or every N months, counted from when it was last done.
+ * - paper: a certificate valid until a date (insurance, pollution test, tax, permit, fitness).
+ */
+export interface VehicleItem {
+  id: string;
+  vehicleId: string;
+  kind: 'service' | 'paper';
+  name: string;
+  everyKm: number | null;
+  everyMonths: number | null;
+  lastKm: number | null;
+  lastDate: string | null;
+  dueDate: string | null;
+  remindKm: number;
+  remindDays: number;
+  position: number;
 }
 
 export interface Settings {
@@ -70,16 +108,24 @@ export interface AppData {
   partners: Partner[];
   trips: Trip[];
   capital: CapitalEntry[];
-  expenses: PartnerExpense[];
+  expenses: Expense[];
+  vehicles: Vehicle[];
+  vehicleItems: VehicleItem[];
   settings: Settings;
   isSample: boolean;
 }
 
+/** Company expense categories, most used first. ('Maintenance' is kept for older entries.) */
 export const EXPENSE_CATEGORIES = [
-  'Maintenance',
+  'Service',
   'Repair',
   'Tyres',
+  'Fuel',
   'Insurance',
+  'Pollution test',
   'Tax / permit',
+  'Driver salary',
+  'Loan / EMI',
+  'Cleaning',
   'Other',
 ] as const;

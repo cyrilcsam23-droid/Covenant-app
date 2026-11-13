@@ -8,6 +8,8 @@ import { ShellHeader, Page } from '../components/Layout';
 import { ResultPlate, RollingMoney, VehiclePlate } from '../components/Plate';
 import { Button, Empty, Segmented, SectionTitle } from '../components/ui';
 import { TripRow } from '../components/TripRow';
+import { needsAttention } from '../lib/vehicle';
+import { ItemRow } from './Vehicles';
 import { SampleNotice } from '../components/SampleNotice';
 
 type Range = 'today' | 'month' | 'all';
@@ -72,14 +74,24 @@ export default function Home() {
 
         <Ahead />
 
+        <VehicleAlerts />
+
         {range === 'month' && <MonthChart month={month} />}
 
         <TripsSection range={range} trips={s.trips} />
 
-        <SectionTitle>After partner expenses</SectionTitle>
+        <SectionTitle
+          action={
+            <Link to="/expenses" className="flex items-center text-sm font-semibold text-ink-2 hover:text-ink">
+              Expenses <ChevronRight size={16} />
+            </Link>
+          }
+        >
+          After company expenses
+        </SectionTitle>
         <div className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
           <Line label="Trip profit" value={s.tripProfit} />
-          <Line label="Paid by partners (maintenance etc.)" value={-s.partnerPaid} />
+          <Line label="Company expenses (service, repairs, salary…)" value={-s.companyExpenses} />
           <div className="flex items-center justify-between gap-3 px-4 py-3.5">
             <span className="font-semibold">Net {rangeLabel}</span>
             <ResultPlate value={s.net} />
@@ -93,18 +105,13 @@ export default function Home() {
             </Link>
           }
         >
-          Put in by partners
+          Capital from partners
         </SectionTitle>
         <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
-          {partnerTotals(data).map(({ partner, capital, paid, total }) => (
+          {partnerTotals(data).map(({ partner, capital }) => (
             <li key={partner.id} className="flex items-center justify-between gap-3 px-4 py-3">
-              <div className="min-w-0">
-                <p className="truncate font-semibold">{partner.name}</p>
-                <p className="text-[0.83rem] text-ink-3">
-                  Capital {money(capital)} · Paid {money(paid)}
-                </p>
-              </div>
-              <span className="num text-[1.25rem] font-semibold">{money(total)}</span>
+              <p className="truncate font-semibold">{partner.name}</p>
+              <span className="num text-[1.25rem] font-semibold">{money(capital)}</span>
             </li>
           ))}
         </ul>
@@ -170,6 +177,36 @@ function Ahead() {
             ))}
           </ul>
         </>
+      )}
+    </>
+  );
+}
+
+/** Vehicle papers expiring and services due, across all vehicles. */
+function VehicleAlerts() {
+  const data = useData();
+  const list = needsAttention(data);
+  if (list.length === 0) return null;
+  return (
+    <>
+      <SectionTitle
+        action={
+          <Link to="/vehicles" className="flex items-center text-sm font-semibold text-ink-2 hover:text-ink">
+            Vehicle <ChevronRight size={16} />
+          </Link>
+        }
+      >
+        Vehicle needs attention
+      </SectionTitle>
+      <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+        {list.slice(0, 4).map(({ vehicle, item, status }) => (
+          <ItemRow key={item.id} vehicle={vehicle} item={item} status={status} showVehicle />
+        ))}
+      </ul>
+      {list.length > 4 && (
+        <Link to="/vehicles" className="mt-2 block px-1 text-sm font-semibold text-ink-2 hover:text-ink">
+          And {list.length - 4} more
+        </Link>
       )}
     </>
   );

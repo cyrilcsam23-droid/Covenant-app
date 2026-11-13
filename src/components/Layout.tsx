@@ -1,13 +1,14 @@
 import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { House, Route, Users, Menu } from 'lucide-react';
+import { CarFront, House, Menu, ReceiptText, Route } from 'lucide-react';
 import { springs } from '../lib/motion';
 
 const tabs = [
   { to: '/', label: 'Home', icon: House, end: true },
   { to: '/trips', label: 'Trips', icon: Route, end: false },
-  { to: '/partners', label: 'Partners', icon: Users, end: false },
+  { to: '/vehicles', label: 'Vehicle', icon: CarFront, end: false },
+  { to: '/expenses', label: 'Expenses', icon: ReceiptText, end: false },
   { to: '/more', label: 'More', icon: Menu, end: false },
 ];
 
@@ -17,7 +18,7 @@ export function TabBar() {
       aria-label="Main"
       className="on-shell fixed inset-x-0 bottom-0 z-30 border-t border-shell-line bg-shell pb-[env(safe-area-inset-bottom)]"
     >
-      <ul className="mx-auto grid max-w-xl grid-cols-4">
+      <ul className="mx-auto grid max-w-xl grid-cols-5">
         {tabs.map(({ to, label, icon: Icon, end }) => (
           <li key={to}>
             <NavLink

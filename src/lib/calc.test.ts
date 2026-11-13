@@ -42,11 +42,13 @@ const trip = (o: Partial<Trip>): Trip => ({
   ...o,
 });
 
-const data = (trips: Trip[], partnerPaid: { date: string; amount: number }[] = []): AppData => ({
+const data = (trips: Trip[], companyCosts: { date: string; amount: number }[] = []): AppData => ({
   partners: [],
   trips,
   capital: [],
-  expenses: partnerPaid.map((e, i) => ({ id: String(i), partnerId: 'p', date: e.date, amount: e.amount, category: 'Repair', description: 'x' })),
+  expenses: companyCosts.map((e, i) => ({ id: String(i), date: e.date, amount: e.amount, category: 'Repair', description: 'x', vehicleId: null, itemId: null, odometerKm: null })),
+  vehicles: [],
+  vehicleItems: [],
   settings: { businessName: 'Covenant', defaultVehicle: '' },
   isSample: false,
 });

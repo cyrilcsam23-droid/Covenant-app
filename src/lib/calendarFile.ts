@@ -73,6 +73,45 @@ export function tripCalendarFile(t: Trip, businessName: string): string {
   return lines.map(fold).join('\r\n') + '\r\n';
 }
 
+/** A paper's expiry (insurance, pollution test…) as an all-day event, reminded a week before and on the day. */
+export function paperCalendarFile(o: { id: string; name: string; vehicle: string; validUntil: string }, businessName: string): string {
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const title = `${o.name} expires (${o.vehicle})`;
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    `PRODID:-//${esc(businessName)}//Vehicle//EN`,
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    `UID:${o.id}-${compact(o.validUntil)}@covenant-vehicle`,
+    `DTSTAMP:${stamp}`,
+    `DTSTART;VALUE=DATE:${compact(o.validUntil)}`,
+    `DTEND;VALUE=DATE:${compact(addDays(o.validUntil, 1))}`,
+    `SUMMARY:${esc(title)}`,
+    `DESCRIPTION:${esc(`Renew the ${o.name.toLowerCase()} for ${o.vehicle}. Valid until this day.`)}`,
+    'TRANSP:TRANSPARENT',
+    'BEGIN:VALARM',
+    'ACTION:DISPLAY',
+    `DESCRIPTION:${esc(`${o.name} for ${o.vehicle} expires in a week`)}`,
+    'TRIGGER:-P7D',
+    'END:VALARM',
+    'BEGIN:VALARM',
+    'ACTION:DISPLAY',
+    `DESCRIPTION:${esc(`${o.name} for ${o.vehicle} expires today`)}`,
+    'TRIGGER:PT9H',
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ];
+  return lines.map(fold).join('\r\n') + '\r\n';
+}
+
+export function addPaperToPhoneCalendar(o: { id: string; name: string; vehicle: string; validUntil: string }, businessName: string) {
+  const slug = o.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  downloadFile(`${slug}-${o.validUntil}.ics`, paperCalendarFile(o, businessName), 'text/calendar');
+}
+
 export function addTripToPhoneCalendar(t: Trip, businessName: string) {
   const name = `trip-${t.date}-${t.to.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'booking'}.ics`;
   downloadFile(name, tripCalendarFile(t, businessName), 'text/calendar');

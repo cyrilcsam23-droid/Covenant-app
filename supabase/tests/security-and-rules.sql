@@ -20,6 +20,7 @@ set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"22222222-2222-4222-8222-222222222222","role":"authenticated"}', true);
 insert into r (step, ok, detail) select 'outsider sees no partners', count(*) = 0, count(*)::text from partners;
 insert into r (step, ok, detail) select 'outsider sees no trips', count(*) = 0, count(*)::text from trips;
+insert into r (step, ok, detail) select 'outsider sees no vehicles', count(*) = 0, count(*)::text from vehicles;
 insert into r (step, ok, detail) select 'outsider is not a member', not public.is_member(), '';
 do $$ begin
   insert into trips (from_place, to_place) values ('a', 'b');
@@ -88,15 +89,33 @@ select pg_temp.refuses('payments not a list', $q$insert into trips (from_place, 
 select pg_temp.refuses('letters in the phone number', $q$insert into trips (from_place, to_place, customer_phone) values ('a', 'b', 'call me')$q$);
 select pg_temp.refuses('end km below start km', $q$insert into trips (from_place, to_place, start_km, end_km) values ('a', 'b', 500, 400)$q$);
 select pg_temp.refuses('empty From place', $q$insert into trips (from_place, to_place) values ('  ', 'b')$q$);
-select pg_temp.refuses('unknown partner-expense category', $q$insert into partner_expenses (partner_id, amount, category, description) select id, 100, 'Party', 'x' from partners limit 1$q$);
+select pg_temp.refuses('unknown expense category', $q$insert into expenses (partner_id, amount, category, description) select id, 100, 'Party', 'x' from partners limit 1$q$);
 select pg_temp.refuses('partner approving another login', $q$insert into app_members (user_id) values ('22222222-2222-4222-8222-222222222222')$q$);
 select pg_temp.refuses('deleting the settings row', $q$delete from app_settings$q$);
 select pg_temp.refuses('deleting partners', $q$delete from partners$q$);
 
 do $$ begin
-  insert into partner_expenses (partner_id, amount, category, description) select id, 4800, 'Maintenance', 'Oil change' from partners limit 1;
+  insert into expenses (partner_id, amount, category, description) select id, 4800, 'Maintenance', 'Oil change' from partners limit 1;
   insert into r (step, ok, detail) values ('valid partner expense saved', true, '');
 exception when others then insert into r (step, ok, detail) values ('valid partner expense saved', false, sqlerrm); end $$;
+
+-- ------------------------------------------------------------ vehicles
+do $$ declare vid uuid; iid uuid; begin
+  insert into vehicles (number, name, odometer_km) values ('TEST 00 X 0001', 'Test car', 48000) returning id into vid;
+  insert into vehicle_items (vehicle_id, kind, name, every_km, every_months, last_km, last_date) values (vid, 'service', 'Oil change', 5000, 6, 45000, '2026-06-01') returning id into iid;
+  insert into vehicle_items (vehicle_id, kind, name, every_months, due_date) values (vid, 'paper', 'Insurance', 12, '2027-03-31');
+  insert into expenses (expense_date, amount, category, description, vehicle_id, item_id, odometer_km) values ('2026-11-12', 1800, 'Service', 'Oil change test', vid, iid, 50100);
+  insert into r (step, ok, detail) values ('vehicle, reminders and a linked company expense saved', true, '');
+  insert into r (step, ok, detail) select 'company expense needs no partner', partner_id is null, coalesce(partner_id::text, 'null') from expenses where vehicle_id = vid;
+  delete from vehicles where id = vid;
+  insert into r (step, ok, detail) select 'deleting a vehicle removes its reminders', count(*) = 0, count(*)::text from vehicle_items where vehicle_id = vid;
+  insert into r (step, ok, detail) select 'deleting a vehicle keeps its expenses (unlinked)', count(*) = 1 and bool_and(vehicle_id is null and item_id is null), count(*)::text from expenses where description = 'Oil change test';
+exception when others then insert into r (step, ok, detail) values ('vehicle, reminders and a linked company expense saved', false, sqlerrm); end $$;
+select pg_temp.refuses('the same vehicle number twice', $q$insert into vehicles (number) values ('KL 99 Z 1'), ('kl99z1')$q$);
+select pg_temp.refuses('a reminder with no schedule', $q$insert into vehicle_items (vehicle_id, kind, name) select id, 'service', 'Nothing' from vehicles limit 1$q$);
+select pg_temp.refuses('a reminder every 5 km', $q$insert into vehicle_items (vehicle_id, kind, name, every_km) select id, 'service', 'Silly', 5 from vehicles limit 1$q$);
+select pg_temp.refuses('an unknown reminder kind', $q$insert into vehicle_items (vehicle_id, kind, name, every_months) select id, 'magic', 'X', 6 from vehicles limit 1$q$);
+select pg_temp.refuses('a negative odometer', $q$insert into vehicles (number, odometer_km) values ('NEG 1', -5)$q$);
 
 reset role;
 do $$ begin
