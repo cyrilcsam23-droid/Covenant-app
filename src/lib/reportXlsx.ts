@@ -166,5 +166,5 @@ export function reportXlsxSheets(r: ReportData): Sheet<Blob>[] {
 }
 
 export async function buildReportXlsx(r: ReportData): Promise<Blob> {
-  return writeXlsxFile(reportXlsxSheets(r), { fontFamily: 'Calibri', fontSize: 11 }).toBlob();
+  return writeXlsxFile(reportXlsxSheets(r)).toBlob();
 }
