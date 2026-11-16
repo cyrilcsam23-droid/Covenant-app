@@ -1,5 +1,6 @@
 import { TRIP_COST_TYPES, type AppData, type Trip, type TripCostType } from './types';
 import { addDays, todayISO } from './format';
+import { inPeriod, type Period } from './period';
 
 // ---------------------------------------------------------------- one trip
 
@@ -43,13 +44,7 @@ export function costsByType(t: Pick<Trip, 'costs'>): Partial<Record<TripCostType
 
 // ---------------------------------------------------------------- periods
 
-export type Period = { kind: 'all' } | { kind: 'month'; month: string } | { kind: 'day'; date: string };
-
-export function inPeriod(date: string, p: Period) {
-  if (p.kind === 'all') return true;
-  if (p.kind === 'month') return date.startsWith(p.month);
-  return date === p.date;
-}
+export { inPeriod, type Period } from './period';
 
 /**
  * Totals for a period. Only finished trips count (an upcoming or still-running trip's fare

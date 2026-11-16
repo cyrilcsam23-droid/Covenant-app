@@ -33,6 +33,7 @@ A "daily dropship" ledger: for each date, record the trip(s) the vehicle did (fr
   - **day-by-day expenses**: fuel, toll, parking, driver bata, food, stay, other
 - **Money rules:** profit = fare − expenses, counted on the full fare, so money owed still counts. Due = fare − payments, shown as "To collect".
 - **Status and totals:** a trip is Upcoming, On trip or Completed, worked out from its dates. Totals count completed trips only, under their **start date**.
+- **Periods:** Home and Expenses filter totals by Day, Month, Year, a custom From–To range, or All time. Day, Month and Year step with arrows and open the phone's date picker; the choice is kept in the address (?p=…) so it survives opening an entry.
 - **Bookings:** future trips are listed under Upcoming and in a calendar. "Add to phone calendar" downloads an .ics event that reminds at 6 pm the evening before and 7 am on the day.
 - **Partner capital** (under More): dated entries per partner, added over time. Starting amounts are unequal or unknown, so each starts at zero and partners enter their own. Partners record capital only.
 - **Company expenses** (Expenses tab): costs outside trips, such as service, repairs, tyres, fuel, insurance, pollution test, tax and permit, driver salary, loan EMI and cleaning. Each has an optional vehicle and odometer reading. There is no "paid by": every expense is a company cost. Net = trip profit − company expenses.

@@ -1,30 +1,29 @@
-import { useState, type ReactNode } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { type ReactNode } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, ChevronRight } from 'lucide-react';
 import { useData } from '../lib/store';
-import { dailyProfit, dues, groupByDay, ongoingTrips, partnerTotals, summarize, upcomingTrips, type Period } from '../lib/calc';
-import { fmtDay, fmtMonth, money, monthOf, num, todayISO } from '../lib/format';
+import { dailyProfit, dues, groupByDay, ongoingTrips, partnerTotals, summarize, upcomingTrips } from '../lib/calc';
+import { periodFromParam, periodPhrase, periodToParam, type Period } from '../lib/period';
+import { fmtDay, fmtMonth, money, num, todayISO } from '../lib/format';
 import { ShellHeader, Page } from '../components/Layout';
 import { ResultPlate, RollingMoney, VehiclePlate } from '../components/Plate';
-import { Button, Empty, Segmented, SectionTitle } from '../components/ui';
+import { PeriodPicker } from '../components/PeriodPicker';
+import { Button, Empty, SectionTitle } from '../components/ui';
 import { TripRow } from '../components/TripRow';
 import { needsAttention } from '../lib/vehicle';
 import { ItemRow } from './Vehicles';
 import { SampleNotice } from '../components/SampleNotice';
 
-type Range = 'today' | 'month' | 'all';
-
 export default function Home() {
   const data = useData();
   const navigate = useNavigate();
-  const [range, setRange] = useState<Range>('today');
+  const [params, setParams] = useSearchParams();
   const today = todayISO();
-  const month = monthOf(today);
-  const period: Period =
-    range === 'today' ? { kind: 'day', date: today } : range === 'month' ? { kind: 'month', month } : { kind: 'all' };
+  const period = periodFromParam(params.get('p'), { kind: 'day', date: today });
+  const setPeriod = (p: Period) => setParams({ p: periodToParam(p) }, { replace: true });
   const s = summarize(data, period);
   const resultWord = s.tripProfit < 0 ? 'Loss' : 'Profit';
-  const rangeLabel = range === 'today' ? 'today' : range === 'month' ? `in ${fmtMonth(month)}` : 'all time';
+  const rangeLabel = periodPhrase(period, today);
 
   return (
     <>
@@ -35,17 +34,7 @@ export default function Home() {
         </div>
 
         <div className="mt-4">
-          <Segmented
-            dark
-            name="Period"
-            value={range}
-            onChange={setRange}
-            options={[
-              { value: 'today', label: 'Today' },
-              { value: 'month', label: 'This month' },
-              { value: 'all', label: 'All time' },
-            ]}
-          />
+          <PeriodPicker name="Period" value={period} onChange={setPeriod} />
         </div>
 
         <div className="mt-6 flex flex-col items-center text-center">
@@ -76,9 +65,9 @@ export default function Home() {
 
         <VehicleAlerts />
 
-        {range === 'month' && <MonthChart month={month} />}
+        {period.kind === 'month' && <MonthChart month={period.month} />}
 
-        <TripsSection range={range} trips={s.trips} />
+        <TripsSection period={period} trips={s.trips} />
 
         <SectionTitle
           action={
@@ -233,9 +222,12 @@ function Line({ label, value }: { label: string; value: number }) {
   );
 }
 
-function TripsSection({ range, trips }: { range: Range; trips: ReturnType<typeof summarize>['trips'] }) {
-  const title = range === 'today' ? 'Today’s trips' : range === 'month' ? 'This month’s trips' : 'Recent trips';
-  const days = groupByDay(trips).slice(0, range === 'today' ? 1 : 4);
+function TripsSection({ period, trips }: { period: Period; trips: ReturnType<typeof summarize>['trips'] }) {
+  const today = todayISO();
+  const oneDay = period.kind === 'day';
+  const isToday = oneDay && period.date === today;
+  const title = isToday ? 'Today’s trips' : oneDay ? `Trips ${periodPhrase(period, today)}` : period.kind === 'all' ? 'Recent trips' : 'Latest trips';
+  const days = groupByDay(trips).slice(0, oneDay ? 1 : 4);
   return (
     <>
       <SectionTitle
@@ -248,14 +240,14 @@ function TripsSection({ range, trips }: { range: Range; trips: ReturnType<typeof
         {title}
       </SectionTitle>
       {days.length === 0 ? (
-        <Empty title={range === 'today' ? 'No trips logged today' : 'No trips yet'}>
+        <Empty title={isToday ? 'No trips logged today' : period.kind === 'all' ? 'No trips yet' : `No trips ${periodPhrase(period, today)}`}>
           Tap <strong className="font-semibold text-ink-2">Log trip</strong> after each drop.
         </Empty>
       ) : (
         <div className="space-y-4">
           {days.map((d) => (
             <div key={d.date}>
-              {range !== 'today' && (
+              {!oneDay && (
                 <p className="mb-1.5 px-1 text-[0.83rem] font-semibold text-ink-3">{fmtDay(d.date)}</p>
               )}
               <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">

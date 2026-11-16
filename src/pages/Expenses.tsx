@@ -1,18 +1,24 @@
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Download, Plus, X } from 'lucide-react';
 import { useData } from '../lib/store';
-import { fmtDay, fmtMonth, money, monthOf, num, todayISO } from '../lib/format';
+import { fmtDay, money, monthOf, num, todayISO } from '../lib/format';
+import { inPeriod, periodFromParam, periodPhrase, periodSlug, periodToParam, type Period } from '../lib/period';
 import { formatPlate } from '../lib/vehicle';
 import type { Expense } from '../lib/types';
 import { ShellHeader, Page } from '../components/Layout';
-import { Button, Empty, IconButton, MonthSwitcher, downloadFile } from '../components/ui';
+import { PeriodPicker } from '../components/PeriodPicker';
+import { Button, Empty, IconButton, downloadFile } from '../components/ui';
 
-/** Company expenses outside trips, month by month. */
+/** Company expenses outside trips, for a day, month, year, range or all time. */
 export default function Expenses() {
   const data = useData();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const month = params.get('m') || monthOf(todayISO());
+  const today = todayISO();
+  // ?m=2026-11 is the older link format (still used when returning from a form).
+  const legacyMonth = params.get('m');
+  const period = periodFromParam(params.get('p') ?? legacyMonth, { kind: 'month', month: monthOf(today) });
+  const phrase = periodPhrase(period, today);
   const vehicleId = params.get('vehicle');
   const vehicle = vehicleId ? data.vehicles.find((v) => v.id === vehicleId) : undefined;
   const plateOf = (id: string | null) => {
@@ -21,7 +27,7 @@ export default function Expenses() {
   };
 
   const list = data.expenses
-    .filter((e) => e.date.startsWith(month) && (!vehicle || e.vehicleId === vehicle.id))
+    .filter((e) => inPeriod(e.date, period) && (!vehicle || e.vehicleId === vehicle.id))
     .sort((a, b) => (a.date === b.date ? b.id.localeCompare(a.id) : b.date.localeCompare(a.date)));
   const total = list.reduce((s, e) => s + e.amount, 0);
   const byCategory = Object.entries(
@@ -30,7 +36,10 @@ export default function Expenses() {
   const days = new Map<string, Expense[]>();
   for (const e of list) days.set(e.date, [...(days.get(e.date) ?? []), e]);
 
-  const go = (m: string) => setParams(vehicle ? { m, vehicle: vehicle.id } : { m }, { replace: true });
+  const go = (p: Period) => {
+    const v = periodToParam(p);
+    setParams(vehicle ? { p: v, vehicle: vehicle.id } : { p: v }, { replace: true });
+  };
   const exportCSV = () => {
     const esc = (v: unknown) => {
       let s = String(v ?? '');
@@ -38,7 +47,7 @@ export default function Expenses() {
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
     const rows = [['Date', 'Type', 'Description', 'Vehicle', 'Odometer', 'Amount'], ...[...list].reverse().map((e) => [e.date, e.category, e.description, plateOf(e.vehicleId), e.odometerKm ?? '', e.amount])];
-    downloadFile(`expenses-${month}.csv`, rows.map((r) => r.map(esc).join(',')).join('\n'));
+    downloadFile(`expenses-${periodSlug(period)}.csv`, rows.map((r) => r.map(esc).join(',')).join('\n'));
   };
 
   return (
@@ -47,7 +56,7 @@ export default function Expenses() {
         <div className="flex items-center justify-between">
           <h1 className="text-[1.35rem] font-semibold">Expenses</h1>
           <div className="flex items-center gap-1">
-            <IconButton label={`Download ${fmtMonth(month)} as a spreadsheet`} onClick={exportCSV} disabled={list.length === 0} className="disabled:opacity-40">
+            <IconButton label={`Download expenses ${phrase} as a spreadsheet`} onClick={exportCSV} disabled={list.length === 0} className="disabled:opacity-40">
               <Download size={20} />
             </IconButton>
             <Button className="!h-10 !rounded-lg !px-3 text-sm" onClick={() => navigate(vehicle ? `/expenses/new?vehicle=${vehicle.id}` : '/expenses/new')}>
@@ -58,7 +67,7 @@ export default function Expenses() {
         <p className="mt-1 text-sm text-shell-muted">Company costs outside trips: service, repairs, insurance, salary, EMI…</p>
         {vehicle && (
           <Link
-            to={`/expenses?m=${month}`}
+            to={`/expenses?p=${periodToParam(period)}`}
             replace
             className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-full border border-plate bg-plate px-3 text-sm font-semibold text-plate-ink"
             aria-label={`Showing ${formatPlate(vehicle.number)} only. Show all vehicles`}
@@ -67,7 +76,7 @@ export default function Expenses() {
           </Link>
         )}
         <div className="mt-4">
-          <MonthSwitcher month={month} onChange={go} />
+          <PeriodPicker name="Expenses period" value={period} onChange={go} />
         </div>
         <div className="mt-4 flex items-end justify-between gap-3">
           <p className="text-sm text-shell-muted">
@@ -92,7 +101,7 @@ export default function Expenses() {
       <Page>
         {list.length === 0 ? (
           <div className="mt-6">
-            <Empty title={`No expenses in ${fmtMonth(month)}`}>
+            <Empty title={`No expenses ${phrase}`}>
               Service, repairs, tyres, insurance, driver salary, EMI: anything the business pays that isn’t part of a trip.
             </Empty>
           </div>
