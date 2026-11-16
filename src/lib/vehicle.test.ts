@@ -50,7 +50,7 @@ const data = (o: Partial<AppData>): AppData => ({
   expenses: [],
   vehicles: [car],
   vehicleItems: [],
-  settings: { businessName: 'Covenant', defaultVehicle: car.number },
+  settings: { businessName: 'Covenant', defaultVehicle: car.number, receiptAddress: '', receiptPhone: '', receiptEmail: '', receiptGstin: '' },
   isSample: false,
   ...o,
 });

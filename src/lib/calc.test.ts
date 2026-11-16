@@ -49,7 +49,7 @@ const data = (trips: Trip[], companyCosts: { date: string; amount: number }[] = 
   expenses: companyCosts.map((e, i) => ({ id: String(i), date: e.date, amount: e.amount, category: 'Repair', description: 'x', vehicleId: null, itemId: null, odometerKm: null })),
   vehicles: [],
   vehicleItems: [],
-  settings: { businessName: 'Covenant', defaultVehicle: '' },
+  settings: { businessName: 'Covenant', defaultVehicle: '', receiptAddress: '', receiptPhone: '', receiptEmail: '', receiptGstin: '' },
   isSample: false,
 });
 

@@ -82,7 +82,7 @@ function emptyData(partners: Partner[] = defaultPartners()): AppData {
     expenses: [],
     vehicles: [],
     vehicleItems: [],
-    settings: { businessName: APP_NAME, defaultVehicle: '' },
+    settings: { businessName: APP_NAME, defaultVehicle: '', receiptAddress: '', receiptPhone: '', receiptEmail: '', receiptGstin: '' },
     isSample: false,
   };
 }
@@ -154,6 +154,8 @@ const normalizeData = (d: AppData): AppData => ({
   expenses: (d.expenses ?? []).map(normalizeExpense),
   vehicles: d.vehicles ?? [],
   vehicleItems: d.vehicleItems ?? [],
+  // Older saved copies don't have the receipt fields yet.
+  settings: { ...emptyData().settings, ...d.settings },
 });
 
 /** Clearly-labelled sample data so the screens have something to show (demo mode only). */
@@ -545,6 +547,10 @@ export const itemToRow = (i: VehicleItem) => ({
 const settingsToRow = (p: Partial<Settings>) => ({
   ...(p.businessName !== undefined ? { business_name: p.businessName } : {}),
   ...(p.defaultVehicle !== undefined ? { default_vehicle: p.defaultVehicle } : {}),
+  ...(p.receiptAddress !== undefined ? { receipt_address: p.receiptAddress } : {}),
+  ...(p.receiptPhone !== undefined ? { receipt_phone: p.receiptPhone } : {}),
+  ...(p.receiptEmail !== undefined ? { receipt_email: p.receiptEmail } : {}),
+  ...(p.receiptGstin !== undefined ? { receipt_gstin: p.receiptGstin } : {}),
 });
 
 // ---------------------------------------------------------------- cloud: upload queue
@@ -698,7 +704,7 @@ async function refresh() {
       fetchAll('expenses', 'created_at'),
       fetchAll('vehicles', 'position'),
       fetchAll('vehicle_items', 'position'),
-      supabase.from('app_settings').select('business_name, default_vehicle').eq('id', 1).maybeSingle(),
+      supabase.from('app_settings').select('business_name, default_vehicle, receipt_address, receipt_phone, receipt_email, receipt_gstin').eq('id', 1).maybeSingle(),
     ]);
     if (settingsRes.error) throw Object.assign(new Error(settingsRes.error.message), { status: settingsRes.status });
     if (userId !== id) return;
@@ -710,7 +716,14 @@ async function refresh() {
       expenses: expenses.map(expenseFromRow),
       vehicles: vehicles.map(vehicleFromRow),
       vehicleItems: items.map(itemFromRow),
-      settings: { businessName: s(row?.business_name) || APP_NAME, defaultVehicle: s(row?.default_vehicle) },
+      settings: {
+        businessName: s(row?.business_name) || APP_NAME,
+        defaultVehicle: s(row?.default_vehicle),
+        receiptAddress: s(row?.receipt_address),
+        receiptPhone: s(row?.receipt_phone),
+        receiptEmail: s(row?.receipt_email),
+        receiptGstin: s(row?.receipt_gstin),
+      },
       isSample: false,
     };
     writeJSON(cacheKey(id), fresh);

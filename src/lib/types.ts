@@ -102,6 +102,11 @@ export interface VehicleItem {
 export interface Settings {
   businessName: string;
   defaultVehicle: string;
+  /** Printed on customer receipts; all optional. */
+  receiptAddress: string;
+  receiptPhone: string;
+  receiptEmail: string;
+  receiptGstin: string;
 }
 
 export interface AppData {

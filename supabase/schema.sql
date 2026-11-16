@@ -197,6 +197,11 @@ create table if not exists app_settings (
   default_vehicle text not null default ''
 );
 insert into app_settings (id) values (1) on conflict do nothing;
+-- Business details printed on customer receipts (all optional).
+alter table app_settings add column if not exists receipt_address text not null default '';
+alter table app_settings add column if not exists receipt_phone text not null default '';
+alter table app_settings add column if not exists receipt_email text not null default '';
+alter table app_settings add column if not exists receipt_gstin text not null default '';
 
 -- Approved partner logins. Admins can also manage logins from the app
 -- (through the admin-users Edge Function; nobody can change this table directly).
@@ -241,6 +246,7 @@ begin
       ('vehicle_items', 'item_reminder_ok', 'check (remind_km between 0 and 20000 and remind_days between 0 and 365 and (last_km is null or last_km >= 0))'),
       ('partners', 'partner_name_ok', 'check (char_length(btrim(name)) between 1 and 60)'),
       ('app_settings', 'settings_text_ok', 'check (char_length(btrim(business_name)) between 1 and 60 and char_length(default_vehicle) <= 30)'),
+      ('app_settings', 'settings_receipt_ok', 'check (char_length(receipt_address) <= 200 and char_length(receipt_phone) <= 40 and char_length(receipt_email) <= 120 and char_length(receipt_gstin) <= 20)'),
       ('app_members', 'member_role_ok', 'check (role in (''admin'', ''partner''))')
     ) as t(tbl, name, def)
   loop

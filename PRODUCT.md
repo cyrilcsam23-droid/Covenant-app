@@ -34,6 +34,7 @@ A "daily dropship" ledger: for each date, record the trip(s) the vehicle did (fr
 - **Money rules:** profit = fare − expenses, counted on the full fare, so money owed still counts. Due = fare − payments, shown as "To collect".
 - **Status and totals:** a trip is Upcoming, On trip or Completed, worked out from its dates. Totals count completed trips only, under their **start date**.
 - **Periods:** Home and Expenses filter totals by Day, Month, Year, a custom From–To range, or All time. Day, Month and Year step with arrows and open the phone's date picker; the choice is kept in the address (?p=…) so it survives opening an entry.
+- **Customer receipt:** any trip with a fare has Share receipt (phone share sheet, e.g. WhatsApp) and Download PDF. It is an A4 PDF in the Covenant Travels brand (logo, navy and gold), in the style of a ride receipt: a greeting, the total with the amount in words and a Paid in full / Balance due tag, then the trip as pickup → drop with dates and starting and ending km, vehicle, distance and duration, then the agreed fare, each advance or payment, total received and balance due, then Billed to and Issued by. It never shows trip expenses or notes. With no payment yet it becomes a Booking confirmation. The receipt number CT-YYMMDD-XXXX comes from the trip. Business phone, email, address and GSTIN for receipts are set in More.
 - **Bookings:** future trips are listed under Upcoming and in a calendar. "Add to phone calendar" downloads an .ics event that reminds at 6 pm the evening before and 7 am on the day.
 - **Partner capital** (under More): dated entries per partner, added over time. Starting amounts are unequal or unknown, so each starts at zero and partners enter their own. Partners record capital only.
 - **Company expenses** (Expenses tab): costs outside trips, such as service, repairs, tyres, fuel, insurance, pollution test, tax and permit, driver salary, loan EMI and cleaning. Each has an optional vehicle and odometer reading. There is no "paid by": every expense is a company cost. Net = trip profit − company expenses.
@@ -53,7 +54,7 @@ None yet. App name: Covenant.
 
 ## Evidence on Hand
 
-No real trip data, logo, or brand assets yet. Demo data in the app is sample data and must be labelled as such.
+Logo: public/brand/covenant-logo.png (Covenant Travels, navy and gold, used on receipts). Demo data in the app is sample data and must be labelled as such.
 
 ## Product Principles
 

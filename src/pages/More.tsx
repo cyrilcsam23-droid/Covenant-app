@@ -34,6 +34,15 @@ export default function More() {
           />
         </div>
 
+        <SectionTitle>On customer receipts</SectionTitle>
+        <div className="space-y-3 rounded-xl border border-line bg-surface p-4">
+          <p className="text-sm text-ink-3">Shown under “Issued by” on every receipt. Leave a box empty to leave it off.</p>
+          <SavedField label="Phone" value={data.settings.receiptPhone} placeholder="+91 98470 00000" inputMode="tel" maxLength={40} onSave={(v) => actions.updateSettings({ receiptPhone: v })} />
+          <SavedField label="Email" value={data.settings.receiptEmail} placeholder="Optional" inputMode="email" maxLength={120} onSave={(v) => actions.updateSettings({ receiptEmail: v })} />
+          <SavedField label="Address" value={data.settings.receiptAddress} placeholder="Building, street, town, PIN" maxLength={200} onSave={(v) => actions.updateSettings({ receiptAddress: v })} />
+          <SavedField label="GSTIN" value={data.settings.receiptGstin} placeholder="Optional" maxLength={20} onSave={(v) => actions.updateSettings({ receiptGstin: v.toUpperCase() })} />
+        </div>
+
         <SectionTitle>Partners</SectionTitle>
         <Link to="/partners" className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 hover:border-ink-3">
           <span className="flex items-center gap-3">
@@ -147,12 +156,16 @@ function SavedField({
   onSave,
   placeholder,
   hint,
+  inputMode,
+  maxLength,
 }: {
   label: string;
   value: string;
   onSave: (v: string) => void;
   placeholder?: string;
   hint?: string;
+  inputMode?: 'tel' | 'email' | 'text';
+  maxLength?: number;
 }) {
   const [v, setV] = useState(value);
   const [saved, setSaved] = useState(false);
@@ -167,6 +180,8 @@ function SavedField({
       label={label}
       value={v}
       placeholder={placeholder}
+      inputMode={inputMode}
+      maxLength={maxLength}
       hint={saved ? 'Saved' : hint}
       onChange={(e) => setV(e.target.value)}
       onBlur={commit}

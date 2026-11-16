@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowDownUp, CalendarPlus, ChevronDown, Phone, Plus, X } from 'lucide-react';
+import { ArrowDownUp, CalendarPlus, ChevronDown, FileDown, Phone, Plus, Share2, X } from 'lucide-react';
 import { actions, useData } from '../lib/store';
 import { tripStatus } from '../lib/calc';
 import { addTripToPhoneCalendar } from '../lib/calendarFile';
@@ -472,11 +472,13 @@ export default function TripForm() {
           </div>
         )}
 
+        {existing && existing.fare > 0 && <ReceiptActions trip={existing} />}
+
         {existing && tripStatus(existing) !== 'done' && (
           <Button
             type="button"
             variant="outline"
-            className="mt-8 w-full"
+            className="mt-3 w-full"
             onClick={() => addTripToPhoneCalendar(existing, data.settings.businessName)}
           >
             <CalendarPlus size={18} /> Add to phone calendar
@@ -527,6 +529,53 @@ export default function TripForm() {
         </div>
       </form>
     </>
+  );
+}
+
+/** Customer receipt as a PDF: share it straight to WhatsApp and co. where the phone allows, or download it. */
+function ReceiptActions({ trip }: { trip: Trip }) {
+  const data = useData();
+  const [busy, setBusy] = useState<'share' | 'download' | null>(null);
+  const [error, setError] = useState('');
+  const canShare = useMemo(() => {
+    try {
+      const probe = new File(['x'], 'receipt.pdf', { type: 'application/pdf' });
+      return typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [probe] });
+    } catch {
+      return false;
+    }
+  }, []);
+  const run = async (kind: 'share' | 'download') => {
+    setBusy(kind);
+    setError('');
+    try {
+      // The PDF maker loads only now, so it never slows down opening the app.
+      const r = await import('../lib/receiptShare');
+      if (kind === 'share') await r.shareReceipt(trip, data.settings);
+      else await r.downloadReceipt(trip, data.settings);
+    } catch {
+      setError('Couldn’t make the receipt. Check the internet connection and try again.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="mt-8">
+      <div className={`grid gap-2 ${canShare ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        {canShare && (
+          <Button type="button" variant="outline" className="w-full" onClick={() => run('share')} disabled={busy !== null}>
+            <Share2 size={18} /> {busy === 'share' ? 'Preparing…' : 'Share receipt'}
+          </Button>
+        )}
+        <Button type="button" variant="outline" className="w-full" onClick={() => run('download')} disabled={busy !== null}>
+          <FileDown size={18} /> {busy === 'download' ? 'Preparing…' : canShare ? 'Download PDF' : 'Download receipt'}
+        </Button>
+      </div>
+      <p className={`mt-1.5 text-sm ${error ? 'font-medium text-loss' : 'text-ink-3'}`} role={error ? 'alert' : undefined}>
+        {error || 'Made from the saved trip, so save any changes first. Business phone and address are set in More.'}
+      </p>
+    </div>
   );
 }
 
