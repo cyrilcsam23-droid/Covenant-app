@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, Cloud, CloudOff, LogOut, Users } from 'lucide-react';
+import { ChevronRight, Cloud, CloudOff, FileBarChart, LogOut, Users } from 'lucide-react';
 import { actions, APP_NAME, useData, useSync } from '../lib/store';
 import { useAuth } from '../lib/auth';
 import { isSupabaseConnected } from '../lib/supabase';
@@ -33,6 +33,18 @@ export default function More() {
             hint="Picked automatically on every new trip."
           />
         </div>
+
+        <SectionTitle>Reports</SectionTitle>
+        <Link to="/reports" className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 hover:border-ink-3">
+          <span className="flex items-center gap-3">
+            <FileBarChart size={20} className="text-ink-3" />
+            <span>
+              <span className="block font-semibold">Business report</span>
+              <span className="block text-sm text-ink-3">Any day, month, year or range · PDF or Excel</span>
+            </span>
+          </span>
+          <ChevronRight size={20} className="shrink-0 text-ink-3" />
+        </Link>
 
         <SectionTitle>On customer receipts</SectionTitle>
         <div className="space-y-3 rounded-xl border border-line bg-surface p-4">

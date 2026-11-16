@@ -71,8 +71,8 @@ export default function Home() {
 
         <SectionTitle
           action={
-            <Link to="/expenses" className="flex items-center text-sm font-semibold text-ink-2 hover:text-ink">
-              Expenses <ChevronRight size={16} />
+            <Link to={`/reports?p=${periodToParam(period)}`} className="flex items-center text-sm font-semibold text-ink-2 hover:text-ink">
+              Full report <ChevronRight size={16} />
             </Link>
           }
         >

@@ -11,6 +11,7 @@ import Home from './pages/Home';
 import Trips from './pages/Trips';
 import TripForm from './pages/TripForm';
 import Partners from './pages/Partners';
+import Reports from './pages/Reports';
 import EntryForm from './pages/EntryForm';
 import Vehicles from './pages/Vehicles';
 import VehicleForm from './pages/VehicleForm';
@@ -27,6 +28,7 @@ const routes = [
   { path: '/trips/new', element: <TripForm /> },
   { path: '/trips/:id', element: <TripForm key="edit" /> },
   { path: '/partners', element: <Partners /> },
+  { path: '/reports', element: <Reports /> },
   { path: '/partners/capital/new', element: <EntryForm /> },
   { path: '/partners/capital/:id', element: <EntryForm key="edit" /> },
   // Older links to partner-paid expenses now open the company expense.
